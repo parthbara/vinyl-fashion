@@ -1,0 +1,440 @@
+/* ════════════════════════════════════════════════════════════════
+   THE SHOP — a dark listening room. Spotlight, dust, a crate of
+   four records. Everything animates on transform/opacity only.
+   ════════════════════════════════════════════════════════════════ */
+
+.shop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+/* ── Room light ─────────────────────────────────────────────── */
+
+.ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ambient-base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 90% at 50% -12%, rgba(66, 52, 39, 0.5) 0%, transparent 58%),
+    radial-gradient(62% 46% at 50% 28%, rgba(255, 180, 94, 0.07) 0%, transparent 70%),
+    linear-gradient(180deg, #0d0b09 0%, #080606 72%, #050404 100%);
+}
+
+.ambient-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  will-change: opacity;
+}
+
+.ambient-glow.is-on {
+  opacity: 1;
+}
+
+.spotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    46% 60% at 50% 0%,
+    rgba(255, 216, 160, 0.09) 0%,
+    rgba(255, 216, 160, 0.03) 46%,
+    transparent 72%
+  );
+}
+
+.floorline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+  background: radial-gradient(58% 90% at 50% 100%, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
+}
+
+.dust {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+
+.shop-head {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px clamp(20px, 3.5vw, 40px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--accent) 75%, transparent);
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  text-indent: 0.14em;
+}
+
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 50%;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 14px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+}
+
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.24em;
+  opacity: 0.5;
+}
+
+/* ── Stage & crate ──────────────────────────────────────────── */
+
+.shop-stage {
+  position: relative;
+  z-index: 4;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 3.2vh, 34px);
+  padding: 0 clamp(16px, 3vw, 40px);
+}
+
+.stage-kicker {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.34em;
+  opacity: 0.5;
+}
+
+.crate {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(14px, 2.6vw, 36px);
+  perspective: 1500px;
+  z-index: 3;
+}
+
+.sleeve-slot {
+  position: relative;
+  width: clamp(150px, 19vw, 252px);
+  flex: none;
+  outline-offset: 8px;
+}
+
+.sleeve-slot.is-ghost {
+  visibility: hidden;
+}
+
+.sleeve-float,
+.sleeve3d {
+  transform-style: preserve-3d;
+  position: relative;
+}
+
+.sleeve3d {
+  will-change: transform;
+}
+
+/* record peeking out the top of the jacket */
+.sleeve-disc {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: -4%;
+  z-index: 1;
+  will-change: transform;
+}
+
+.jacket {
+  position: relative;
+  z-index: 2;
+  aspect-ratio: 1;
+  border-radius: 2.5px;
+  background: #101010;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.jacket-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* spine shadow (left) and mouth slit (right) */
+.jacket::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent);
+  z-index: 3;
+}
+
+.jacket-mouth {
+  position: absolute;
+  right: 0;
+  top: 3%;
+  bottom: 3%;
+  width: 6px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.55), transparent);
+  z-index: 3;
+}
+
+.jacket-wear {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(24% 14% at 2% 2%, rgba(255, 255, 255, 0.08), transparent),
+    radial-gradient(24% 14% at 98% 98%, rgba(255, 255, 255, 0.05), transparent);
+  border-radius: 2.5px;
+  pointer-events: none;
+}
+
+.jacket-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: linear-gradient(
+    115deg,
+    transparent 26%,
+    rgba(255, 255, 255, 0.13) 40%,
+    rgba(255, 255, 255, 0.02) 52%,
+    transparent 64%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  animation: jacket-sheen 8.5s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 1.9s);
+  pointer-events: none;
+}
+
+@keyframes jacket-sheen {
+  0%, 62% { background-position: 130% 0; }
+  82%, 100% { background-position: -40% 0; }
+}
+
+.sleeve-shadow {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: -13%;
+  height: 15%;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, 0.6), transparent 72%);
+  filter: blur(7px);
+  z-index: 0;
+}
+
+.slot-meta {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+.slot-no {
+  font-size: 8.5px;
+  letter-spacing: 0.28em;
+  opacity: 0.45;
+}
+
+.slot-artist {
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+}
+
+.slot-title {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+
+.crate-rail {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 1180px);
+  height: 60px;
+  margin-top: -46px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
+    linear-gradient(180deg, #2b2118 0%, #1a130d 55%, #120d09 100%);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -14px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.crate-rail::after {
+  content: '';
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  top: 12px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.stage-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  opacity: 0.8;
+  min-height: 16px;
+  text-align: center;
+  animation: meta-in 0.45s ease both;
+}
+
+.stage-meta b {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@keyframes meta-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 0.8;
+    transform: translateY(0);
+  }
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+
+.shop-foot {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px clamp(16px, 3vw, 28px);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+  background: color-mix(in srgb, var(--bg0) 40%, transparent);
+}
+
+.foot-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  opacity: 0.55;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ── Dimmed during the cinematic ────────────────────────────── */
+
+.shop-head,
+.shop-stage,
+.shop-foot {
+  transition: opacity 1s ease, filter 1s ease;
+}
+
+.shop.is-dimmed .shop-head,
+.shop.is-dimmed .shop-stage,
+.shop.is-dimmed .shop-foot {
+  opacity: 0.08;
+  filter: brightness(0.4);
+  pointer-events: none;
+}
+
+/* ── Mobile: crate becomes a snap carousel ──────────────────── */
+
+@media (max-width: 760px) {
+  .crate {
+    width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 24px 22vw 30px;
+    gap: 30px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .crate::-webkit-scrollbar {
+    display: none;
+  }
+  .sleeve-slot {
+    width: 56vw;
+    scroll-snap-align: center;
+  }
+  .crate-rail {
+    display: none;
+  }
+  .brand-name {
+    font-size: 11.5px;
+    letter-spacing: 0.28em;
+  }
+  .brand-sub {
+    display: none;
+  }
+  .foot-badge {
+    display: none;
+  }
+  .stage-meta {
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+  }
+}

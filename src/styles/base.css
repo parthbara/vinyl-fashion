@@ -1,0 +1,422 @@
+/* ════════════════════════════════════════════════════════════════
+   BASE — theme variables, reset, shared objects (disc, cursor,
+   grain, ticker, eq bars). Every color on the site reads from the
+   CSS variables below; applyTheme() floods them per album.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg0: #0d0b09;
+  --bg1: #1a1410;
+  --ink: #f2ece2;
+  --accent: #d8a548;
+  --accent2: #8a6f4d;
+  --glow: #ffb45e;
+  --paper: #171310;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --display-case: uppercase;
+  --display-tracking: 0.18em;
+  --display-weight: 700;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--bg0);
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg0);
+  color: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body.no-scroll {
+  overflow: hidden;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul {
+  list-style: none;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg0);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 99px;
+  border: 3px solid var(--bg0);
+}
+
+:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+html.has-custom-cursor,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+
+/* ── The record ─────────────────────────────────────────────── */
+
+.disc {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.disc-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.07), transparent 42%),
+    repeating-radial-gradient(circle at 50% 50%, #0a0a0b 0 1.5px, #17181b 1.5px 3px),
+    #0b0b0d;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 0 40px rgba(0, 0, 0, 0.5),
+    0 14px 44px rgba(0, 0, 0, 0.5);
+}
+
+.disc-spin .disc-body {
+  animation: disc-rotate 1.8s linear infinite; /* an honest 33⅓ RPM */
+}
+
+.disc-label {
+  position: absolute;
+  inset: 31%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    0 0 16px rgba(0, 0, 0, 0.45);
+}
+
+.disc-label-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.disc-hole {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: #0a0a0b;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  z-index: 2;
+}
+
+.disc-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 208deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.12) 14deg,
+    transparent 38deg,
+    transparent 178deg,
+    rgba(255, 255, 255, 0.07) 198deg,
+    transparent 226deg
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@keyframes disc-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Cover fallback block ───────────────────────────────────── */
+
+.cover-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-align: center;
+  padding: 8%;
+  text-transform: uppercase;
+}
+
+/* ── Film grain + vignette ──────────────────────────────────── */
+
+.grain {
+  position: fixed;
+  inset: -60px;
+  z-index: 95;
+  pointer-events: none;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-jitter 0.9s steps(6) infinite;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 94;
+  pointer-events: none;
+  background: radial-gradient(120% 100% at 50% 42%, transparent 56%, rgba(0, 0, 0, 0.34) 100%);
+}
+
+@keyframes grain-jitter {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-14px, 8px); }
+  40% { transform: translate(10px, -12px); }
+  60% { transform: translate(-8px, -6px); }
+  80% { transform: translate(12px, 10px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ── Custom cursor ──────────────────────────────────────────── */
+
+.cursor-ring {
+  position: fixed;
+  visibility: hidden;
+  opacity: 0;
+  left: -19px;
+  top: -19px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--ink) 75%, transparent);
+  border-radius: 50%;
+  z-index: 100;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  transition: width 0.3s ease, height 0.3s ease, left 0.3s ease, top 0.3s ease,
+    background-color 0.3s ease;
+  will-change: transform;
+}
+
+.cursor-ring.is-active {
+  width: 66px;
+  height: 66px;
+  left: -33px;
+  top: -33px;
+  background: color-mix(in srgb, var(--bg0) 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.cursor-label {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  transform: translateX(0.11em); /* optically center the tracked text */
+}
+
+.cursor-ring.is-active .cursor-label {
+  opacity: 0.95;
+}
+
+.cursor-dot {
+  position: fixed;
+  visibility: hidden;
+  opacity: 0;
+  left: -2.5px;
+  top: -2.5px;
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+  z-index: 100;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* ── EQ bars (now-playing pulse) ────────────────────────────── */
+
+.ns-eq {
+  display: inline-flex;
+  gap: 2.5px;
+  align-items: flex-end;
+  height: 11px;
+}
+
+.ns-eq i {
+  width: 2.5px;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleY(0.22);
+  transform-origin: bottom;
+}
+
+.live .ns-eq i,
+.on.ns-eq i,
+.ns-eq.on i {
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+}
+
+.ns-eq i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ns-eq i:nth-child(3) {
+  animation-delay: 0.34s;
+}
+
+@keyframes eq-bounce {
+  from { transform: scaleY(0.18); }
+  to { transform: scaleY(1); }
+}
+
+/* ── Sound toggle ───────────────────────────────────────────── */
+
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 15px;
+  border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+  transition: border-color 0.3s ease, opacity 0.3s ease;
+}
+
+.sound-toggle:hover {
+  border-color: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.sound-toggle .vu {
+  display: inline-flex;
+  gap: 2.5px;
+  align-items: flex-end;
+  height: 10px;
+}
+
+.sound-toggle .vu i {
+  width: 2.5px;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleY(0.3);
+  transform-origin: bottom;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.sound-toggle.live .vu i {
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+}
+
+.sound-toggle.live .vu i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.sound-toggle.live .vu i:nth-child(3) {
+  animation-delay: 0.34s;
+}
+
+.sound-toggle.off {
+  opacity: 0.55;
+}
+
+.sound-toggle.off .vu i {
+  transform: scaleY(0.12);
+  opacity: 0.5;
+}
+
+/* ── Ticker marquee ─────────────────────────────────────────── */
+
+.ticker {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+
+.ticker-row {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-slide var(--ticker-dur, 40s) linear infinite;
+  will-change: transform;
+}
+
+.ticker-item {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  opacity: 0.6;
+  padding-right: 20px;
+}
+
+.ticker-dot {
+  font-style: normal;
+  opacity: 0.45;
+  padding-left: 20px;
+}
+
+@keyframes ticker-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ── Motion respect ─────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .grain,
+  .ticker-row,
+  .disc-spin .disc-body,
+  .ns-eq i,
+  .sound-toggle .vu i {
+    animation: none !important;
+  }
+}

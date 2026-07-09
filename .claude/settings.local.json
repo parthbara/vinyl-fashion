@@ -5,7 +5,13 @@
       "Bash(git init *)",
       "Bash(git config *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git remote *)",
+      "Bash(rm -r vinyl-fashion/.git)",
+      "Bash(git rm *)",
+      "Bash(git push *)",
+      "Bash(ls .claude)",
+      "Bash(cat \"C:\\\\Users\\\\user2\\\\Desktop\\\\vinyl fashion/.claude/launch.json\")"
     ]
   }
 }

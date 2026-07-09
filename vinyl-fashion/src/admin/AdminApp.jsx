@@ -451,10 +451,15 @@ function Orders() {
 // ── add stock ────────────────────────────────────────────────────
 const EMPTY = { title: '', album_id: ALBUMS[0].id, garment_type: 'tee', category: '', price: '', sale_price: '', stock: 1, description: '', ai_info: '', caption: '', variants: '', colors: '', sizes: [] }
 
-// quick-fill presets for the size picker
+// quick-fill presets for the size & color pickers
 const SIZE_PRESETS = {
   alpha: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
   numeric: ['28', '30', '32', '34', '36', '38', '40'],
+}
+const COLOR_PRESETS = {
+  base: ['Black', 'White', 'Navy', 'Charcoal', 'Gray'],
+  vibrant: ['Red', 'Royal Blue', 'Forest Green', 'Crimson', 'Burgundy'],
+  earth: ['Tan', 'Cream', 'Olive', 'Rust', 'Khaki'],
 }
 
 function AddStock() {
@@ -467,10 +472,10 @@ function AddStock() {
   const [selectedSlot, setSelectedSlot] = useState(0)
   const fileRef = useRef(null)
   const [sizeInput, setSizeInput] = useState('')
+  const [colorInput, setColorInput] = useState('')
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
-  // sizes are freeform (letters like S/M/L or numbers like 32) and kept
-  // as an ordered, de-duped list of chips
+  // sizes/colors are freeform and kept as ordered, de-duped chip lists
   const addSizes = (raw) => {
     const parts = (Array.isArray(raw) ? raw : String(raw).split(','))
       .map((v) => v.trim())
@@ -484,6 +489,25 @@ function AddStock() {
     setSizeInput('')
   }
   const removeSize = (val) => setF((s) => ({ ...s, sizes: s.sizes.filter((x) => x !== val) }))
+
+  const addColors = (raw) => {
+    const parts = (Array.isArray(raw) ? raw : String(raw).split(','))
+      .map((v) => v.trim())
+      .filter(Boolean)
+    if (!parts.length) return
+    setF((s) => {
+      const next = [...(s.colors ? s.colors.split(',').map(c => c.trim()) : [])]
+      for (const p of parts) if (!next.some((x) => x.toLowerCase() === p.toLowerCase())) next.push(p)
+      return { ...s, colors: next.join(', ') }
+    })
+    setColorInput('')
+  }
+  const removeColor = (val) => {
+    setF((s) => {
+      const colors = (s.colors ? s.colors.split(',').map(c => c.trim()) : []).filter(x => x !== val)
+      return { ...s, colors: colors.join(', ') }
+    })
+  }
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
@@ -597,8 +621,40 @@ function AddStock() {
         <input value={f.variants} onChange={set('variants')} placeholder="Leave empty for a single design" />
       </div>
       <div className="adm-field full">
-        <label>COLOUR VARIANTS (comma-separated — e.g. Black, Bone, Crimson)</label>
-        <input value={f.colors} onChange={set('colors')} placeholder="Leave empty for a single colour" />
+        <label>COLOURS (letters or names — leave empty for one colour)</label>
+        {f.colors && (
+          <div className="adm-chips">
+            {f.colors.split(',').map((c) => {
+              const col = c.trim()
+              return col ? (
+                <span className="adm-chip" key={col}>
+                  {col}
+                  <button type="button" aria-label={`Remove ${col}`} onClick={() => removeColor(col)}>×</button>
+                </span>
+              ) : null
+            })}
+          </div>
+        )}
+        <div className="adm-chip-add">
+          <input
+            value={colorInput}
+            onChange={(e) => setColorInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addColors(colorInput)
+              }
+            }}
+            placeholder="Add a colour (e.g. Black, Navy, Cream)"
+          />
+          <button type="button" className="adm-chip-btn" onClick={() => addColors(colorInput)}>＋ Add colour</button>
+        </div>
+        <div className="adm-chip-presets">
+          <span>Quick add:</span>
+          <button type="button" onClick={() => addColors(COLOR_PRESETS.base)}>Base · Black, White, Navy, etc</button>
+          <button type="button" onClick={() => addColors(COLOR_PRESETS.vibrant)}>Vibrant · Red, Blue, Green, etc</button>
+          <button type="button" onClick={() => addColors(COLOR_PRESETS.earth)}>Earth · Tan, Cream, Olive, etc</button>
+        </div>
       </div>
       <div className="adm-field full">
         <label>SIZES (letters or numbers — leave empty for one-size)</label>

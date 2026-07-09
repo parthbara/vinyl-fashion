@@ -7,7 +7,7 @@ import { compressImages, compressImage } from '../lib/imageCompress'
 import { ALBUMS } from '../data/albums'
 
 export { hasSupabase }
-export { lookupCollection } from '../lib/itunes'
+export { lookupCollection, searchAlbums } from '../lib/itunes'
 
 const sb = () => getSupabase()
 
@@ -153,7 +153,15 @@ const variantRow = (product_id, prefix, label, stock) => ({
   stock,
 })
 
-export async function addProduct(fields, files, designs = [], colors = []) {
+// Sizes live in their own column (product_variants.size); the storefront
+// reads them straight off and shows a size picker.
+const sizeRow = (product_id, label, stock) => ({
+  product_id,
+  size: label.trim(),
+  stock,
+})
+
+export async function addProduct(fields, files, designs = [], colors = [], sizes = []) {
   const s = await sb()
   const images = files?.length ? await uploadProductImages(files) : []
   const { data, error } = await s
@@ -165,6 +173,7 @@ export async function addProduct(fields, files, designs = [], colors = []) {
   const rows = [
     ...designs.map((v) => v.trim()).filter(Boolean).map((d) => variantRow(data.id, 'design', d, fields.stock ?? 0)),
     ...colors.map((v) => v.trim()).filter(Boolean).map((c) => variantRow(data.id, 'color', c, fields.stock ?? 0)),
+    ...sizes.map((v) => v.trim()).filter(Boolean).map((sz) => sizeRow(data.id, sz, fields.stock ?? 0)),
   ]
   if (rows.length) {
     const { error: ve } = await s.from('product_variants').insert(rows)

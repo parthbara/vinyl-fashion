@@ -4,7 +4,7 @@ import CoverImage from './CoverImage'
 // The record itself — grooves, sheen, label and spindle hole are all
 // CSS; only the label art is an image.
 const VinylDisc = forwardRef(function VinylDisc(
-  { album, spinning = false, className = '' },
+  { album, spinning = false, className = '', loading = 'eager' },
   ref
 ) {
   return (
@@ -15,7 +15,7 @@ const VinylDisc = forwardRef(function VinylDisc(
       <div className="disc-body">
         <div className="disc-label">
           {/* label art is always small on screen — low tier is plenty */}
-          <CoverImage album={album} size="low" className="disc-label-art" />
+          <CoverImage album={album} size="low" className="disc-label-art" loading={loading} />
         </div>
         <span className="disc-hole" />
       </div>

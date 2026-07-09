@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ALBUMS, makePlaceholderCapsule } from '../data/albums'
+import { CURATED_ALBUMS } from '../data/curatedAlbums'
 import baked from '../data/tracks.json'
 import { ensureFont } from '../lib/fonts'
 import { BRAND, CONTACT } from '../config'
@@ -29,6 +30,7 @@ import {
   getSiteSettings,
   saveSiteSettings,
   lookupCollection,
+  searchAlbums,
 } from './adminData'
 import './admin.css'
 
@@ -447,7 +449,13 @@ function Orders() {
 }
 
 // ── add stock ────────────────────────────────────────────────────
-const EMPTY = { title: '', album_id: ALBUMS[0].id, garment_type: 'tee', category: '', price: '', sale_price: '', stock: 1, description: '', ai_info: '', caption: '', variants: '', colors: '' }
+const EMPTY = { title: '', album_id: ALBUMS[0].id, garment_type: 'tee', category: '', price: '', sale_price: '', stock: 1, description: '', ai_info: '', caption: '', variants: '', colors: '', sizes: [] }
+
+// quick-fill presets for the size picker
+const SIZE_PRESETS = {
+  alpha: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  numeric: ['28', '30', '32', '34', '36', '38', '40'],
+}
 
 function AddStock() {
   const [f, setF] = useState(EMPTY)
@@ -458,7 +466,24 @@ function AddStock() {
   const [albumList, setAlbumList] = useState(ALBUMS.map((a) => ({ id: a.id, capsule_no: a.capsuleNo, title: a.title })))
   const [selectedSlot, setSelectedSlot] = useState(0)
   const fileRef = useRef(null)
+  const [sizeInput, setSizeInput] = useState('')
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+
+  // sizes are freeform (letters like S/M/L or numbers like 32) and kept
+  // as an ordered, de-duped list of chips
+  const addSizes = (raw) => {
+    const parts = (Array.isArray(raw) ? raw : String(raw).split(','))
+      .map((v) => v.trim())
+      .filter(Boolean)
+    if (!parts.length) return
+    setF((s) => {
+      const next = [...s.sizes]
+      for (const p of parts) if (!next.some((x) => x.toLowerCase() === p.toLowerCase())) next.push(p)
+      return { ...s, sizes: next }
+    })
+    setSizeInput('')
+  }
+  const removeSize = (val) => setF((s) => ({ ...s, sizes: s.sizes.filter((x) => x !== val) }))
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
@@ -498,7 +523,8 @@ function AddStock() {
         },
         files,
         f.variants.split(','),
-        f.colors.split(',')
+        f.colors.split(','),
+        f.sizes
       )
       setMsg({ ok: true, text: `“${f.title}” added to the ${f.album_id} capsule.` })
       setF({ ...EMPTY, album_id: f.album_id })
@@ -573,6 +599,39 @@ function AddStock() {
       <div className="adm-field full">
         <label>COLOUR VARIANTS (comma-separated — e.g. Black, Bone, Crimson)</label>
         <input value={f.colors} onChange={set('colors')} placeholder="Leave empty for a single colour" />
+      </div>
+      <div className="adm-field full">
+        <label>SIZES (letters or numbers — leave empty for one-size)</label>
+        {f.sizes.length > 0 && (
+          <div className="adm-chips">
+            {f.sizes.map((sz) => (
+              <span className="adm-chip" key={sz}>
+                {sz}
+                <button type="button" aria-label={`Remove ${sz}`} onClick={() => removeSize(sz)}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="adm-chip-add">
+          <input
+            value={sizeInput}
+            onChange={(e) => setSizeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addSizes(sizeInput)
+              }
+            }}
+            placeholder="Add a size (e.g. S, M, L, Free, 32)"
+          />
+          <button type="button" className="adm-chip-btn" onClick={() => addSizes(sizeInput)}>＋ Add size</button>
+        </div>
+        <div className="adm-chip-presets">
+          <span>Quick add:</span>
+          <button type="button" onClick={() => addSizes(SIZE_PRESETS.alpha)}>Alphabetical · XS–XXL</button>
+          <button type="button" onClick={() => addSizes(SIZE_PRESETS.numeric)}>Numerical · 28–40</button>
+          <button type="button" onClick={() => addSizes('Free')}>Free size</button>
+        </div>
       </div>
       <p className="adm-note full" style={{ marginTop: -4 }}>
         Photo order = <b>design images first, then colour images</b>. Selecting a design or colour on the
@@ -755,13 +814,77 @@ const fontName = (font) => String(font).split(',')[0].replace(/^["']|["']$/g, ''
 const bakedTracksFor = (cid) => baked[String(cid)]?.tracks || []
 const STUDIO_SECTIONS = ['ESSENTIALS', 'SOUND', 'VISUALS', 'COPY']
 
+const slugify = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const JUNK_RE = /karaoke|tribute|in the style|made famous|originally performed|instrumental|8.?bit|lullaby|rendition|cover version|as made popular/i
+const normLoose = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+// Pick the cleanest real release for an {artist,title} from search hits:
+// must match artist + title, not be junk, ≥3 tracks; prefer the plainest
+// (shortest) title so the original beats deluxe/remaster reissues.
+function bestMatch(results, artist, title) {
+  const aN = normLoose(artist)
+  const tN = normLoose(title)
+  return (
+    results
+      .filter((r) => {
+        if (JUNK_RE.test(r.artist || '') || JUNK_RE.test(r.title || '')) return false
+        const ra = normLoose(r.artist)
+        const rt = normLoose(r.title)
+        return (ra.includes(aN) || aN.includes(ra)) && rt.includes(tN) && (r.trackCount || 0) >= 3
+      })
+      .sort((x, y) => (x.title || '').length - (y.title || '').length)[0] || null
+  )
+}
+
 function Albums() {
   const { busy, data, err, reload } = useLoad(fetchAlbumRows)
   const [selectedId, setSelectedId] = useState(null)
   const [importing, setImporting] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [bulk, setBulk] = useState(null) // { total, done, added, skipped, failed, current, running }
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
+
+  // Bulk-import the curated all-genre list as Coming-Soon capsules.
+  // Sequential + throttled so iTunes doesn't rate-limit; dedups against
+  // what's already in the crate; each becomes a live Coming-Soon record.
+  const runBulk = async () => {
+    if (bulk?.running) return
+    const rowsNow = data || []
+    const haveSlug = new Set(rowsNow.map((a) => a.id))
+    const haveCid = new Set(rowsNow.map((a) => a.collection_id).filter(Boolean))
+    let added = 0, skipped = 0, failed = 0, sort = rowsNow.length
+    setBulk({ total: CURATED_ALBUMS.length, done: 0, added: 0, skipped: 0, failed: 0, current: '', running: true })
+    for (let i = 0; i < CURATED_ALBUMS.length; i++) {
+      const { artist, title } = CURATED_ALBUMS[i]
+      setBulk((b) => ({ ...b, done: i, current: `${artist} — ${title}` }))
+      const slug = slugify(`${artist}-${title}`)
+      if (haveSlug.has(slug)) { skipped++; setBulk((b) => ({ ...b, skipped })); continue }
+      try {
+        const res = await searchAlbums(`${artist} ${title}`, 25)
+        const pick = bestMatch(res, artist, title)
+        if (!pick || haveCid.has(pick.collectionId)) {
+          skipped++; setBulk((b) => ({ ...b, skipped }))
+        } else {
+          await createAlbum({
+            id: slug, collection_id: Number(pick.collectionId),
+            artist: pick.artist, title: pick.title, display_title: (pick.title || '').toUpperCase(),
+            year: pick.year || null, label: '', capsule_no: '',
+            featured: '', story: '',
+            artwork: pick.artwork || null, palette: ALBUMS[0].palette, fonts: ALBUMS[0].fonts,
+            ticker: [], notes: [], effects: { comingSoon: true, comingSoonText: 'COMING SOON' },
+            clip: {}, status: 'live', sort: sort++,
+          })
+          haveSlug.add(slug); haveCid.add(pick.collectionId)
+          added++; setBulk((b) => ({ ...b, added }))
+        }
+      } catch { failed++; setBulk((b) => ({ ...b, failed })) }
+      await new Promise((r) => setTimeout(r, 550)) // throttle iTunes
+    }
+    setBulk((b) => ({ ...b, done: CURATED_ALBUMS.length, current: '', running: false }))
+    reload()
+  }
+
   if (err) return <Err err={err} retry={reload} />
   const rows = data || []
   const shown = rows.filter((a) => {
@@ -788,12 +911,27 @@ function Albums() {
       </p>
       <div className="adm-toolbar">
         <button className="adm-btn" onClick={() => setCreating(true)}>＋ NEW CAPSULE</button>
+        <button className="adm-btn ghost" disabled={bulk?.running} onClick={runBulk}>
+          {bulk?.running ? 'IMPORTING…' : `＋ IMPORT TOP ${CURATED_ALBUMS.length} ALBUMS (Coming Soon)`}
+        </button>
         <button className="adm-btn ghost" disabled={importing} onClick={doImport}>
           {importing ? 'IMPORTING…' : rows.length ? '↻ RE-SYNC SEED CAPSULES' : '＋ IMPORT SEED CAPSULES'}
         </button>
         <button className="adm-btn ghost" onClick={reload}>↻</button>
       </div>
-      {creating && <NewCapsule onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload() }} existing={rows} />}
+      {bulk && (
+        <div className={`adm-bulk ${bulk.running ? 'running' : 'done'}`}>
+          <div className="adm-bulk-bar">
+            <span style={{ width: `${Math.round((bulk.done / bulk.total) * 100)}%` }} />
+          </div>
+          <p className="adm-note">
+            {bulk.running
+              ? `Importing ${bulk.done}/${bulk.total} — ${bulk.current}`
+              : `Done · ${bulk.added} added · ${bulk.skipped} not on iTunes / skipped · ${bulk.failed} failed`}
+          </p>
+        </div>
+      )}
+      {creating && <NewCapsule onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload() }} onAdded={reload} existing={rows} />}
       {!busy && !rows.length && (
         <div className="adm-empty adm-card"><span>No capsules yet — import the seed or create one.</span></div>
       )}
@@ -826,13 +964,64 @@ function Albums() {
   )
 }
 
-// New capsule — auto-fill from an iTunes collection id, or by hand.
-function NewCapsule({ onClose, onCreated, existing }) {
+// New capsule — search the iTunes library and import, paste a
+// collection id, or fill it in by hand.
+function NewCapsule({ onClose, onCreated, onAdded, existing }) {
   const [f, setF] = useState({ id: '', collection_id: '', artist: '', title: '', year: '', artwork: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [term, setTerm] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [added, setAdded] = useState([]) // collectionIds imported this session
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const slugify = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+  // a slug not already taken (auto-suffix on collision)
+  const freeSlug = (title, cid) => {
+    let base = slugify(title) || `capsule-${cid}`
+    if (!existing.some((a) => a.id === base)) return base
+    let n = 2
+    while (existing.some((a) => a.id === `${base}-${n}`)) n++
+    return `${base}-${n}`
+  }
+
+  const doSearch = async () => {
+    if (!term.trim()) return
+    setSearching(true); setMsg(null)
+    try {
+      const res = await searchAlbums(term)
+      setResults(res)
+      if (!res.length) setMsg({ ok: false, text: `Nothing in the library for “${term.trim()}”.` })
+    } catch (e) { setMsg({ ok: false, text: e.message }) }
+    setSearching(false)
+  }
+
+  // one-click add straight to capsules, enriched with tracklist + hi-res art
+  const importAlbum = async (r) => {
+    setBusy(true); setMsg(null)
+    try {
+      let artwork = r.artwork
+      let featured = ''
+      try {
+        const d = await lookupCollection(r.collectionId)
+        if (d) { artwork = d.artwork || artwork; featured = d.tracks?.[0]?.name || '' }
+      } catch { /* enrich is best-effort — import still proceeds */ }
+      await createAlbum({
+        id: freeSlug(r.title, r.collectionId), collection_id: Number(r.collectionId),
+        artist: r.artist || 'ARTIST', title: r.title, display_title: r.title.toUpperCase(),
+        year: r.year ? Number(r.year) : null, label: '', capsule_no: '',
+        featured, story: '',
+        artwork: artwork || null, palette: ALBUMS[0].palette, fonts: ALBUMS[0].fonts,
+        ticker: [], notes: [], effects: { comingSoon: true, comingSoonText: 'COMING SOON' },
+        clip: {}, status: 'live', sort: existing.length,
+      })
+      setAdded((a) => [...a, r.collectionId])
+      setMsg({ ok: true, text: `Imported ${r.artist} — ${r.title} as a Coming-Soon capsule.` })
+      onAdded?.()
+    } catch (e) { setMsg({ ok: false, text: e.message }) }
+    setBusy(false)
+  }
 
   const doLookup = async () => {
     setBusy(true); setMsg(null)
@@ -866,9 +1055,43 @@ function NewCapsule({ onClose, onCreated, existing }) {
 
   return (
     <div className="qv-overlay" onClick={onClose}>
-      <div className="adm-card" style={{ width: 'min(560px,94vw)', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+      <div className="adm-card" style={{ width: 'min(640px,94vw)', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <p className="adm-sec-title">NEW CAPSULE</p>
         <div className="adm-form">
+          <div className="adm-field full">
+            <label>SEARCH THE LIBRARY (artist or album — imports art, tracks & meta)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch() } }}
+                placeholder="e.g. Frank Ocean Blonde"
+              />
+              <button className="adm-btn ghost" disabled={searching || !term.trim()} onClick={doSearch}>
+                {searching ? 'SEARCHING…' : 'SEARCH'}
+              </button>
+            </div>
+          </div>
+          {results.length > 0 && (
+            <div className="adm-lib full">
+              {results.map((r) => (
+                <div className="adm-lib-card" key={r.collectionId}>
+                  {r.artwork
+                    ? <img src={r.artwork.replace('1200x1200bb', '200x200bb')} alt="" loading="lazy" />
+                    : <span className="adm-lib-art" />}
+                  <div className="adm-lib-meta">
+                    <b>{r.title}</b>
+                    <small>{r.artist} · {r.year || '—'}{r.trackCount ? ` · ${r.trackCount} tracks` : ''}</small>
+                  </div>
+                  {added.includes(r.collectionId)
+                    ? <span className="adm-lib-added">ADDED ✓</span>
+                    : <button className="adm-btn" disabled={busy} onClick={() => importAlbum(r)}>IMPORT</button>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="adm-note full" style={{ marginTop: 2 }}>— or add by iTunes ID / by hand —</p>
           <div className="adm-field full"><label>ITUNES COLLECTION ID (optional — auto-fills art, tracks, meta)</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={f.collection_id} onChange={set('collection_id')} placeholder="e.g. 1443160553" />
@@ -883,7 +1106,7 @@ function NewCapsule({ onClose, onCreated, existing }) {
           {msg && <div className={`full ${msg.ok ? 'adm-ok' : 'adm-err'}`}>{msg.text}</div>}
           <div className="full adm-actions">
             <button className="adm-btn" disabled={busy} onClick={create}>CREATE (starts as Coming Soon)</button>
-            <button className="adm-btn ghost" onClick={onClose}>CANCEL</button>
+            <button className="adm-btn ghost" onClick={onClose}>{added.length ? 'DONE' : 'CANCEL'}</button>
           </div>
           <p className="adm-note full">New capsules start hidden behind a Coming-Soon sticker — flip it off when the drop is ready.</p>
         </div>

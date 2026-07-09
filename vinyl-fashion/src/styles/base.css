@@ -103,6 +103,10 @@ html.has-custom-cursor * {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
+  /* keep the spindle hole's z-index contained: while paused the disc
+     body isn't animating (no stacking context), so the hole used to
+     escape and punch a black dot through the album cover in front */
+  isolation: isolate;
 }
 
 .disc-body {

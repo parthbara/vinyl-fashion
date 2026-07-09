@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { BRAND, CONTACT, waLink } from '../config'
 import { useAlbumData } from '../lib/useAlbumData'
@@ -9,7 +9,6 @@ import CoverImage from './CoverImage'
 import VinylDisc from './VinylDisc'
 import Turntable from './Turntable'
 import CapsuleGrid from './CapsuleGrid'
-import SoundToggle from './SoundToggle'
 import * as sfx from '../lib/sfx'
 
 // A whole storefront re-skinned to one record — clothes first.
@@ -28,9 +27,17 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
   const thisAlbumLoaded = nowPlaying?.albumId === album.id
   const playingThis = thisAlbumLoaded && isPlaying
 
+  // turntable = the single play/pause control
   const toggle = () => {
     if (playingThis) pause()
     else if (thisAlbumLoaded) resume()
+    else if (featured) playTrack(album, featured)
+  }
+
+  // the hero chip only STARTS the needle — pausing lives on the deck
+  const startNeedle = () => {
+    if (playingThis) return
+    if (thisAlbumLoaded) resume()
     else if (featured) playTrack(album, featured)
   }
 
@@ -85,6 +92,21 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closing])
 
+  // tuck the corner deck away once you reach the footer, so it never
+  // sits on top of the RETURN button / fine print
+  const [dockTucked, setDockTucked] = useState(false)
+  useEffect(() => {
+    const onScroll = () => {
+      const doc = document.documentElement
+      const scrollable = doc.scrollHeight > window.innerHeight + 240
+      const nearBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - 200
+      setDockTucked(scrollable && nearBottom)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   const titleLines = album.displayTitle.split('\n')
   const songName = (thisAlbumLoaded ? nowPlaying.track.name : featured?.name || album.featured)
   const staged = !revealOrigin && !closing
@@ -111,7 +133,6 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
           <span className="back-arrow">⟵</span> RETURN THE RECORD
         </button>
         <span className="album-brand">{BRAND.name}</span>
-        <SoundToggle />
       </nav>
 
       <div className="album-body">
@@ -139,8 +160,8 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
           <div className="hero-actions" data-reveal>
             <button
               className={`now-chip ${playingThis ? 'live' : ''}`}
-              data-cursor={playingThis ? 'pause' : 'play'}
-              onClick={toggle}
+              data-cursor={playingThis ? undefined : 'play'}
+              onClick={startNeedle}
             >
               <span className="ns-eq">
                 <i />
@@ -199,7 +220,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
         </div>
       </footer>
 
-      <div className="dock-tt" ref={dockRef}>
+      <div className={`dock-tt ${dockTucked ? 'is-tucked' : ''}`} ref={dockRef}>
         <Turntable album={album} size="dock" playing={playingThis} onToggle={toggle} />
         <span className="dock-label">{playingThis ? 'ON THE PLATTER' : 'NEEDLE UP'}</span>
       </div>

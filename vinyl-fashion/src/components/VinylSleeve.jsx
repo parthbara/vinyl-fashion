@@ -9,7 +9,7 @@ import { hasFinePointer, prefersReducedMotion } from '../lib/env'
 // One record in the crate: a CSS-3D jacket with the disc tucked
 // behind it. Floats idle, tilts toward the cursor, lifts on hover
 // with the vinyl sliding out — click pulls it from the crate.
-export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hidden }) {
+export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hidden, dense = false }) {
   const floatRef = useRef(null)
   const tiltRef = useRef(null)
   const jacketRef = useRef(null)
@@ -26,7 +26,9 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
       rx: gsap.quickTo(el, 'rotationX', { duration: 0.6, ease: 'power3' }),
       ry: gsap.quickTo(el, 'rotationY', { duration: 0.6, ease: 'power3' }),
     }
-    // idle breathing, staggered per slot
+    // idle breathing, staggered per slot — skipped on a dense wall
+    // (dozens of infinite tweens is the thing that actually janks)
+    if (dense) return
     const float = gsap.to(floatRef.current, {
       y: -9,
       duration: 2.6 + index * 0.35,
@@ -38,7 +40,7 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
     return () => {
       float.kill()
     }
-  }, [index])
+  }, [index, dense])
 
   const onMove = (e) => {
     if (!quick.current) return
@@ -56,7 +58,7 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
     if (prefersReducedMotion()) return
     // gentle in a dense wall — a small lift + the record easing up
     gsap.to(tiltRef.current, { y: -14, scale: 1.045, duration: 0.5, ease: 'back.out(1.5)' })
-    gsap.to(discRef.current, { yPercent: -26, duration: 0.55, ease: 'power3.out' })
+    if (discRef.current) gsap.to(discRef.current, { yPercent: -26, duration: 0.55, ease: 'power3.out' })
   }
 
   const onLeave = () => {
@@ -65,7 +67,7 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
     quick.current?.rx(0)
     quick.current?.ry(0)
     gsap.to(tiltRef.current, { y: 0, scale: 1, duration: 0.6, ease: 'power3.out' })
-    gsap.to(discRef.current, { yPercent: 0, duration: 0.55, ease: 'power3.inOut' })
+    if (discRef.current) gsap.to(discRef.current, { yPercent: 0, duration: 0.55, ease: 'power3.inOut' })
   }
 
   const open = () => {
@@ -103,11 +105,13 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
     >
       <div className="sleeve-float" ref={floatRef}>
         <div className="sleeve3d" ref={tiltRef}>
-          <div className="sleeve-disc" ref={discRef}>
-            <VinylDisc album={album} />
-          </div>
+          {!dense && (
+            <div className="sleeve-disc" ref={discRef}>
+              <VinylDisc album={album} loading="eager" />
+            </div>
+          )}
           <div className="jacket" ref={jacketRef}>
-            <CoverImage album={album} size="low" className="jacket-cover" />
+            <CoverImage album={album} size="low" className="jacket-cover" loading={dense ? 'lazy' : 'eager'} />
             <span className="jacket-sheen" />
             <span className="jacket-mouth" />
             <span className="jacket-wear" />

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BRAND, waLink } from '../config'
 import { useAlbums } from '../lib/useAlbums'
+import { useArtistImage } from '../lib/artistImage'
+import { useCoverPalette } from '../lib/palette'
 import { warmAlbumArt } from '../lib/preload'
 import baked from '../data/tracks.json'
 import VinylSleeve from './VinylSleeve'
 import CoverImage from './CoverImage'
 import DustCanvas from './DustCanvas'
 import Ticker from './Ticker'
-import SoundToggle from './SoundToggle'
 import * as sfx from '../lib/sfx'
 
 const chunk = (arr, n) => {
@@ -21,9 +22,17 @@ const chunk = (arr, n) => {
 // wall; mobile keeps the single swipe crate. The crate is DB-driven
 // (Album Studio) with the seed as instant fallback.
 export default function Shop({ onOpen, dimmed, openingId }) {
-  const albums = useAlbums()
+  const rawAlbums = useAlbums()
+  // available records first, Coming-Soon ones sink to the bottom of the
+  // wall (stable — keeps each group's own order)
+  const albums = useMemo(
+    () => [...rawAlbums].sort((a, b) => (a.comingSoon ? 1 : 0) - (b.comingSoon ? 1 : 0)),
+    [rawAlbums]
+  )
   const [hoverId, setHoverId] = useState(null)
   const [soonPeek, setSoonPeek] = useState(null)
+  const [results, setResults] = useState(null) // query string for the results page
+  const [artistView, setArtistView] = useState(null) // artist name for the artist page
   const hovered = albums.find((a) => a.id === hoverId)
 
   const lastGlowRef = useRef(albums[0])
@@ -48,23 +57,35 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     return chunk(albums, Math.ceil(albums.length / rowCount))
   }, [cols, albums])
 
+  // a big crate (bulk-imported Coming-Soon wall) must not eagerly warm
+  // dozens of covers — only pre-warm the first shelf; the rest lazy-load
+  const dense = albums.length > 24
   useEffect(() => {
-    const t = setTimeout(() => albums.forEach((a) => warmAlbumArt(a, 'low')), 600)
+    const t = setTimeout(() => albums.slice(0, 12).forEach((a) => warmAlbumArt(a, 'low')), 600)
     return () => clearTimeout(t)
   }, [albums])
 
-  // search across artist / album / every baked track name
-  const search = useMemo(() => {
-    const index = albums.map((a) => ({
-      a,
-      hay: `${a.artist} ${a.title}`.toLowerCase(),
-      tracks: (baked[String(a.collectionId)]?.tracks || []).map((t) => t.name),
-    }))
-    return (q) => {
+  // one index over artist / album / every baked track name, shared by
+  // the quick dropdown and the full results page.
+  const searchIndex = useMemo(
+    () =>
+      albums.map((a) => ({
+        a,
+        hay: `${a.artist} ${a.title}`.toLowerCase(),
+        artistLc: a.artist.toLowerCase(),
+        titleLc: a.title.toLowerCase(),
+        tracks: (baked[String(a.collectionId)]?.tracks || []).map((t) => t.name),
+      })),
+    [albums]
+  )
+
+  // compact list for the type-ahead dropdown (max 6)
+  const quickSearch = useMemo(
+    () => (q) => {
       const ql = q.trim().toLowerCase()
       if (ql.length < 2) return []
       const out = []
-      for (const e of index) {
+      for (const e of searchIndex) {
         if (e.hay.includes(ql)) out.push({ album: e.a, song: null })
         else {
           const song = e.tracks.find((t) => t.toLowerCase().includes(ql))
@@ -72,8 +93,37 @@ export default function Shop({ onOpen, dimmed, openingId }) {
         }
       }
       return out.slice(0, 6)
-    }
-  }, [albums])
+    },
+    [searchIndex]
+  )
+
+  // full grouped result set (albums / artists / songs) for the results
+  // page you land on when you press Enter — Spotify-style.
+  const fullSearch = useMemo(
+    () => (q) => {
+      const ql = q.trim().toLowerCase()
+      if (ql.length < 1) return { albums: [], artists: [], songs: [] }
+      const albumHits = []
+      const songHits = []
+      const artistMap = new Map()
+      for (const e of searchIndex) {
+        const artistMatch = e.artistLc.includes(ql)
+        if (e.titleLc.includes(ql) || artistMatch) albumHits.push(e.a)
+        if (artistMatch && !artistMap.has(e.artistLc)) {
+          artistMap.set(e.artistLc, { artist: e.a.artist, album: e.a })
+        }
+        for (const t of e.tracks) {
+          if (t.toLowerCase().includes(ql)) songHits.push({ album: e.a, song: t })
+        }
+      }
+      return {
+        albums: albumHits,
+        artists: [...artistMap.values()],
+        songs: songHits.slice(0, 14),
+      }
+    },
+    [searchIndex]
+  )
 
   const tickerItems = useMemo(
     () => [
@@ -84,6 +134,24 @@ export default function Shop({ onOpen, dimmed, openingId }) {
       'PULL · PLAY · WEAR',
     ],
     [albums]
+  )
+
+  // pick from the full results page: close it, then open the record
+  const pickFromResults = (album) => {
+    setResults(null)
+    openFromSearch(album)
+  }
+
+  // pick from an artist page: close everything, then open the record
+  const pickFromArtist = (album) => {
+    setArtistView(null)
+    setResults(null)
+    openFromSearch(album)
+  }
+
+  const artistAlbums = useMemo(
+    () => (artistView ? albums.filter((a) => a.artist === artistView) : []),
+    [artistView, albums]
   )
 
   const openFromSearch = (album) => {
@@ -105,7 +173,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
   }
 
   return (
-    <section className={`shop ${dimmed ? 'is-dimmed' : ''}`}>
+    <section className={`shop ${dimmed ? 'is-dimmed' : ''} ${dense ? 'is-dense' : ''}`}>
       <div className="ambient">
         <div className="ambient-base" />
         <div
@@ -130,8 +198,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
             </span>
           </div>
         </div>
-        <SearchBox search={search} onPick={openFromSearch} />
-        <SoundToggle />
+        <SearchBox search={quickSearch} onPick={openFromSearch} onSubmit={setResults} />
       </header>
 
       <div className="shop-stage">
@@ -149,6 +216,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
                     onSoon={setSoonPeek}
                     onHover={setHoverId}
                     hidden={openingId === album.id}
+                    dense={dense}
                   />
                 ))}
               </div>
@@ -175,7 +243,201 @@ export default function Shop({ onOpen, dimmed, openingId }) {
       </footer>
 
       {soonPeek && <ComingSoonPeek album={soonPeek} onClose={() => setSoonPeek(null)} />}
+
+      {results != null && (
+        <SearchResults
+          query={results}
+          data={fullSearch(results)}
+          onPick={pickFromResults}
+          onArtist={setArtistView}
+          onClose={() => setResults(null)}
+        />
+      )}
+
+      {artistView && (
+        <ArtistView
+          artist={artistView}
+          albums={artistAlbums}
+          onPick={pickFromArtist}
+          onClose={() => setArtistView(null)}
+        />
+      )}
     </section>
+  )
+}
+
+// An artist page — every pressing filed under one name.
+function ArtistView({ artist, albums, onPick, onClose }) {
+  useEffect(() => {
+    const k = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+
+  // real artist portrait (Deezer) → album cover fallback, but only once
+  // the lookup settles so the cover doesn't flash in first
+  const { url, ready } = useArtistImage(artist)
+  const hero = url || (ready ? albums[0]?.artwork.replace('1200x1200bb', '600x600bb') : null)
+
+  return (
+    <div className="sr-overlay" role="dialog" aria-label={`${artist} — albums`}>
+      <div
+        className="artist-hero"
+        style={hero ? { backgroundImage: `url(${hero})` } : undefined}
+      >
+        <button className="sr-close artist-close" data-cursor="back" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+        <div className="artist-hero-text">
+          <span className="sr-head-kicker">ARTIST</span>
+          <h2 className="artist-name">{artist}</h2>
+          <p className="artist-count">
+            {albums.length} PRESSING{albums.length === 1 ? '' : 'S'} IN THE CRATE
+          </p>
+        </div>
+      </div>
+
+      <div className="sr-scroll">
+        <section className="sr-block">
+          <h3 className="sr-block-title">DISCOGRAPHY</h3>
+          <div className="sr-grid">
+            {albums.map((album) => (
+              <button
+                key={album.id}
+                className="sr-album"
+                data-cursor="open"
+                onClick={() => onPick(album)}
+              >
+                <img src={album.artwork.replace('1200x1200bb', '300x300bb')} alt="" loading="lazy" />
+                <b>{album.title}</b>
+                <i>
+                  {album.year}
+                  {album.comingSoon && ' · ◷ SOON'}
+                </i>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+// One artist result: a real Deezer portrait, album cover as fallback.
+function ArtistChip({ artist, album, onArtist }) {
+  const { url, ready } = useArtistImage(artist)
+  // hold the album-cover fallback until Deezer settles → no flash
+  const src = url || (ready ? album.artwork.replace('1200x1200bb', '300x300bb') : null)
+  return (
+    <button className="sr-artist" data-cursor="open" onClick={() => onArtist(artist)}>
+      {src ? <img src={src} alt="" loading="lazy" /> : <span className="sr-artist-ph" />}
+      <b>{artist}</b>
+      <i>ARTIST</i>
+    </button>
+  )
+}
+
+// The results page — press Enter in search and land here, Spotify-style:
+// artists, albums and songs grouped, each opening its record.
+function SearchResults({ query, data, onPick, onArtist, onClose }) {
+  useEffect(() => {
+    const k = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+
+  const { albums, artists, songs } = data
+  const empty = !albums.length && !artists.length && !songs.length
+  const top = albums[0] || artists[0]?.album || songs[0]?.album
+
+  return (
+    <div className="sr-overlay" role="dialog" aria-label={`Search results for ${query}`}>
+      <div className="sr-head">
+        <div className="sr-head-text">
+          <span className="sr-head-kicker">SEARCH RESULTS</span>
+          <h2 className="sr-head-q">“{query}”</h2>
+        </div>
+        <button className="sr-close" data-cursor="back" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+
+      {empty ? (
+        <div className="sr-empty">
+          NOTHING IN THE CRATE FOR “{query.trim().toUpperCase()}”
+        </div>
+      ) : (
+        <div className="sr-scroll">
+          {top && (
+            <section className="sr-block">
+              <h3 className="sr-block-title">TOP RESULT</h3>
+              <button className="sr-top" data-cursor="open" onClick={() => onPick(top)}>
+                <img src={top.artwork.replace('1200x1200bb', '300x300bb')} alt="" loading="lazy" />
+                <span className="sr-top-text">
+                  <b>{top.title}</b>
+                  <i>{top.artist}</i>
+                  <em>{top.comingSoon ? `◷ ${top.comingSoonText}` : 'ALBUM'}</em>
+                </span>
+              </button>
+            </section>
+          )}
+
+          {artists.length > 0 && (
+            <section className="sr-block">
+              <h3 className="sr-block-title">ARTISTS</h3>
+              <div className="sr-row">
+                {artists.map(({ artist, album }) => (
+                  <ArtistChip key={artist} artist={artist} album={album} onArtist={onArtist} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {albums.length > 0 && (
+            <section className="sr-block">
+              <h3 className="sr-block-title">ALBUMS</h3>
+              <div className="sr-grid">
+                {albums.map((album) => (
+                  <button
+                    key={album.id}
+                    className="sr-album"
+                    data-cursor="open"
+                    onClick={() => onPick(album)}
+                  >
+                    <img src={album.artwork.replace('1200x1200bb', '300x300bb')} alt="" loading="lazy" />
+                    <b>{album.title}</b>
+                    <i>
+                      {album.artist} · {album.year}
+                      {album.comingSoon && ' · ◷ SOON'}
+                    </i>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {songs.length > 0 && (
+            <section className="sr-block">
+              <h3 className="sr-block-title">SONGS</h3>
+              <ul className="sr-songs">
+                {songs.map(({ album, song }, i) => (
+                  <li key={`${album.id}-${i}`}>
+                    <button className="sr-song" data-cursor="open" onClick={() => onPick(album)}>
+                      <img src={album.artwork.replace('1200x1200bb', '100x100bb')} alt="" loading="lazy" />
+                      <span className="sr-song-text">
+                        <b>{song}</b>
+                        <i>{album.artist} — {album.title}</i>
+                      </span>
+                      <span className="sr-song-play" aria-hidden="true">▶</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -188,20 +450,23 @@ function ComingSoonPeek({ album, onClose }) {
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
 
-  const p = album.palette
+  // morph the teaser to the record's own cover colours (falls back to
+  // the album's stored palette until the cover-derived one resolves)
+  const extracted = useCoverPalette(album)
+  const p = extracted || album.palette
   return (
     <div className="qv-overlay" onClick={onClose} role="dialog" aria-label={`${album.title} — coming soon`}>
       <div
         className="soon-peek"
         onClick={(e) => e.stopPropagation()}
-        style={{ background: `linear-gradient(158deg, ${p.bg1}, ${p.bg0})`, color: p.ink }}
+        style={{ background: `linear-gradient(158deg, ${p.bg1}, ${p.bg0})`, color: p.ink, transition: 'background 0.5s ease, color 0.5s ease' }}
       >
         <button className="qv-x" aria-label="Close" data-cursor="back" onClick={onClose}>✕</button>
         <div className="soon-peek-art">
           <CoverImage album={album} size="mid" />
         </div>
         <div className="soon-peek-body">
-          <span className="soon-peek-tag" style={{ background: p.accent, color: p.bg0 }}>
+          <span className="soon-peek-tag" style={{ color: p.accent, borderColor: p.accent }}>
             ◷ {album.comingSoonText}
           </span>
           <h3 className="soon-peek-title">{album.title}</h3>
@@ -226,7 +491,7 @@ function ComingSoonPeek({ album, onClose }) {
   )
 }
 
-function SearchBox({ search, onPick }) {
+function SearchBox({ search, onPick, onSubmit }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const results = useMemo(() => search(q), [q, search])
@@ -249,9 +514,9 @@ function SearchBox({ search, onPick }) {
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') setOpen(false)
-          if (e.key === 'Enter' && results[0]) {
+          if (e.key === 'Enter' && q.trim().length >= 1) {
             setOpen(false)
-            onPick(results[0].album)
+            onSubmit(q.trim())
           }
         }}
       />
@@ -282,6 +547,18 @@ function SearchBox({ search, onPick }) {
             ))
           ) : (
             <div className="search-none">NOTHING IN THE CRATE FOR “{q.trim().toUpperCase()}”</div>
+          )}
+          {results.length > 0 && (
+            <button
+              className="search-all"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                setOpen(false)
+                onSubmit(q.trim())
+              }}
+            >
+              SEE ALL RESULTS <span className="search-all-key">↵</span>
+            </button>
           )}
         </div>
       )}

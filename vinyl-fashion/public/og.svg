@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#1a1410"/>
+      <stop offset="78%" stop-color="#070605"/>
+    </radialGradient>
+    <radialGradient id="label" cx="42%" cy="36%" r="72%">
+      <stop offset="0%" stop-color="#e7c072"/>
+      <stop offset="55%" stop-color="#c79a42"/>
+      <stop offset="100%" stop-color="#9c7128"/>
+    </radialGradient>
+    <path id="arc" d="M 340 315 A 60 60 0 0 1 460 315" fill="none"/>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- record -->
+  <g transform="translate(400 315)">
+    <circle r="210" fill="#0b0b0d"/>
+    <circle r="210" fill="none" stroke="#1c1d20" stroke-width="1.5"/>
+    <circle r="176" fill="none" stroke="#17181b" stroke-width="12"/>
+    <circle r="150" fill="none" stroke="#17181b" stroke-width="12"/>
+    <circle r="124" fill="none" stroke="#17181b" stroke-width="12"/>
+    <circle r="66" fill="url(#label)"/>
+    <circle r="62" fill="none" stroke="rgba(20,14,8,.35)" stroke-width="1"/>
+    <circle r="6" fill="#0a0908"/>
+  </g>
+  <text font-family="Georgia, 'Times New Roman', serif" font-weight="700" fill="#14100c" font-size="20" letter-spacing="2">
+    <textPath href="#arc" startOffset="50%" text-anchor="middle">VINYL FASHION</textPath>
+  </text>
+
+  <!-- wordmark -->
+  <g transform="translate(720 250)">
+    <text x="0" y="0" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="800" fill="#f2ece2" font-size="76" letter-spacing="6">VINYL</text>
+    <text x="0" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="800" fill="#f2ece2" font-size="76" letter-spacing="6">FASHION</text>
+    <rect x="4" y="120" width="150" height="2" fill="#d8a548"/>
+    <text x="0" y="158" font-family="'Courier New', monospace" fill="#d8a548" font-size="21" letter-spacing="7">WEAR THE SOUND</text>
+    <text x="0" y="196" font-family="'Courier New', monospace" fill="#8a6f4d" font-size="15" letter-spacing="4">EST. MMXXVI · 33⅓ RPM · STEREO</text>
+  </g>
+</svg>

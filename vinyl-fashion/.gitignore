@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# env — keep secrets out of git; .env.example IS committed
+.env
+.env.*
+!.env.example

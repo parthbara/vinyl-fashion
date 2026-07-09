@@ -1,0 +1,39 @@
+# Netlify config — build, SPA routing, caching, security headers.
+# Works on the free tier.
+
+[build]
+  base = "vinyl-fashion"
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback (also mirrored in public/_redirects for local parity).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Hashed build assets never change — cache them hard.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Baseline security headers on every response.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+
+# Content-Security-Policy — enable after deploying and confirming
+# nothing is blocked. Origins used by the app are pre-listed:
+#   images  → Apple artwork CDN + Supabase storage
+#   media   → iTunes audio previews
+#   connect → iTunes lookup + Supabase API
+#   fonts   → Google Fonts
+# [[headers]]
+#   for = "/*"
+#   [headers.values]
+#     Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob: https://*.mzstatic.com https://*.supabase.co; media-src 'self' https://*.itunes.apple.com; connect-src 'self' https://itunes.apple.com https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'self'; base-uri 'self'"

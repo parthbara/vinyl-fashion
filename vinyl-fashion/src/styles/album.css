@@ -1,0 +1,1136 @@
+/* ════════════════════════════════════════════════════════════════
+   ALBUM PAGE — the whole storefront re-skinned to one record.
+   Colors and typography arrive via the flooded CSS variables.
+   ════════════════════════════════════════════════════════════════ */
+
+.album-page {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  color: var(--ink);
+  background: linear-gradient(
+    180deg,
+    var(--bg0) 0%,
+    color-mix(in srgb, var(--bg0) 88%, black 12%) 100%
+  );
+}
+
+/* blurred cover = the room's light source */
+
+.album-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* fed a ~420px image (see CoverImage lowRes) — the blur destroys
+   detail anyway, and filtering 1/8th the pixels is dramatically
+   cheaper on phone GPUs */
+.album-bg-art {
+  position: absolute;
+  left: 50%;
+  top: -18%;
+  width: 120vmin;
+  transform: translateX(-50%) translateZ(0);
+  filter: blur(72px) saturate(1.3);
+  opacity: 0.3;
+}
+
+.album-bg-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      110% 70% at 50% -10%,
+      color-mix(in srgb, var(--bg1) 55%, transparent) 0%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg0) 12%, transparent) 0%,
+      var(--bg0) 82%
+    );
+}
+
+.album-page > :not(.album-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Nav ────────────────────────────────────────────────────── */
+
+.album-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px clamp(18px, 3.5vw, 34px);
+  background: color-mix(in srgb, var(--bg0) 55%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+}
+
+/* backdrop-filter re-blurs on every scrolled frame — kill it on touch
+   devices and lean on a more opaque wash instead */
+@media (hover: none) {
+  .album-nav {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: color-mix(in srgb, var(--bg0) 90%, transparent);
+  }
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 18px;
+  border: 1px solid color-mix(in srgb, var(--ink) 32%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--ink);
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  white-space: nowrap;
+}
+
+.back-btn:hover {
+  background: var(--ink);
+  color: var(--bg0);
+  border-color: var(--ink);
+}
+
+.back-arrow {
+  font-size: 12px;
+}
+
+.album-brand {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 11px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* ── Body: sticky record rail + the clothes, above the fold ──── */
+
+.album-page.is-staged {
+  visibility: hidden;
+}
+
+.album-body {
+  display: grid;
+  grid-template-columns: minmax(270px, 340px) 1fr;
+  gap: clamp(24px, 4vw, 60px);
+  align-items: start;
+  padding: clamp(18px, 3.5vh, 34px) clamp(22px, 5vw, 70px) 0;
+}
+
+.album-rail {
+  position: sticky;
+  top: 86px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-kicker {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.3em;
+  opacity: 0.6;
+  margin-bottom: 14px;
+}
+
+.hero-title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-case);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(26px, 2.7vw, 42px);
+  line-height: 1.06;
+  text-shadow: 0 0 70px color-mix(in srgb, var(--glow) 32%, transparent);
+}
+
+.hero-title span {
+  display: block;
+}
+
+.hero-artist {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  opacity: 0.85;
+  margin-top: 14px;
+}
+
+.hero-story {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: 14px;
+  line-height: 1.75;
+  opacity: 0.82;
+  max-width: 40ch;
+  margin-top: 12px;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.btn-capsule {
+  padding: 13px 24px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn-capsule:hover {
+  background: var(--accent);
+  color: var(--bg0);
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.now-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 20px;
+  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--ink);
+  transition: border-color 0.3s ease, background-color 0.3s ease;
+  max-width: 100%;
+}
+
+.now-chip.live {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.now-chip:hover {
+  border-color: var(--accent);
+}
+
+.hero-art {
+  position: relative;
+  width: min(100%, 290px);
+  aspect-ratio: 1.16;
+  margin-bottom: 22px;
+  transform-style: preserve-3d;
+  perspective: 1300px;
+}
+
+.hero-disc {
+  position: absolute;
+  right: 0;
+  top: 5%;
+  width: 78%;
+}
+
+.hero-cover-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 86%;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #101010;
+  box-shadow:
+    0 50px 130px color-mix(in srgb, var(--glow) 22%, rgba(0, 0, 0, 0.55)),
+    0 10px 30px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.hero-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Tracklist ──────────────────────────────────────────────── */
+
+.tracklist {
+  padding: clamp(28px, 6vh, 64px) clamp(22px, 6vw, 80px);
+}
+
+.tl-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.tl-title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-case);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(20px, 2.6vw, 30px);
+}
+
+.tl-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  opacity: 0.55;
+}
+
+.tl-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(20px, 4vw, 64px);
+}
+
+.tl-side-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  opacity: 0.6;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  padding-bottom: 11px;
+  margin-bottom: 6px;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: 5px;
+  transition: background-color 0.25s ease, transform 0.25s ease;
+}
+
+.track:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  transform: translateX(5px);
+}
+
+.track.is-live {
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.track.is-live .track-num {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.track-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.45;
+  width: 24px;
+  flex: none;
+}
+
+.track-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+.track-star {
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--accent2);
+  border: 1px solid color-mix(in srgb, var(--accent2) 55%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.track-eq {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.track-eq.on {
+  opacity: 1;
+}
+
+.track-dur {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.track-skeleton {
+  height: 42px;
+  border-radius: 5px;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ink) 6%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 130% 0; }
+  to { background-position: -90% 0; }
+}
+
+/* ── Capsule ────────────────────────────────────────────────── */
+
+.capsule {
+  padding: 4px 0 150px;
+  min-width: 0;
+}
+
+.capsule-head {
+  text-align: left;
+  margin-bottom: 28px;
+}
+
+.capsule-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  opacity: 0.6;
+}
+
+.capsule-title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-case);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(22px, 3vw, 40px);
+  margin: 12px 0;
+  text-shadow: 0 0 50px color-mix(in srgb, var(--glow) 28%, transparent);
+}
+
+.capsule-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  opacity: 0.5;
+}
+
+.capsule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 18px;
+}
+
+/* editorial insert between garments — the album's voice */
+
+.liner-note {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  padding: 22px 26px;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 25px,
+      color-mix(in srgb, var(--ink) 4%, transparent) 25px 26px
+    ),
+    color-mix(in srgb, var(--paper) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 12px;
+  transform: rotate(-0.6deg);
+}
+
+.liner-note-kicker {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.3em;
+  color: var(--accent2);
+}
+
+.liner-note-text {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: 13.5px;
+  line-height: 1.75;
+  opacity: 0.85;
+  max-width: 52ch;
+}
+
+.garment {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 12px;
+  padding: 18px 18px 22px;
+  transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.garment:hover {
+  transform: translateY(-7px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 28px 70px color-mix(in srgb, var(--glow) 15%, rgba(0, 0, 0, 0.35));
+}
+
+.garment::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ink) 7%, transparent) 46%,
+    transparent 60%
+  );
+  background-size: 240% 100%;
+  background-position: 120% 0;
+  transition: background-position 0.9s ease;
+  pointer-events: none;
+}
+
+.garment:hover::after {
+  background-position: -40% 0;
+}
+
+.garment-stage {
+  position: relative;
+  aspect-ratio: 1 / 1.02;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.garment-svg {
+  width: 74%;
+  fill: color-mix(in srgb, currentColor 15%, transparent);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--glow) 16%, rgba(0, 0, 0, 0.25)));
+}
+
+.garment-svg .detail {
+  fill: none;
+  opacity: 0.5;
+  stroke-width: 1.1;
+}
+
+.garment-name {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.garment-price {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  opacity: 0.5;
+  margin-top: 7px;
+}
+
+/* real product photo fills the stage where a silhouette would sit */
+.garment-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.garment-flag {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg0) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--ink);
+  backdrop-filter: blur(4px);
+}
+
+.garment-buy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.garment-buy .garment-price {
+  margin-top: 0;
+  opacity: 0.85;
+  font-size: 10px;
+}
+
+.garment-buy .garment-price s {
+  opacity: 0.5;
+  margin-right: 4px;
+}
+
+.garment-order {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.2em;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--ink);
+  white-space: nowrap;
+  transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.garment-order:hover {
+  background: var(--accent);
+  color: var(--bg0);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ── Quick-view ─────────────────────────────────────────────── */
+
+.qv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, var(--bg0) 72%, black);
+  animation: qv-fade 0.25s ease both;
+}
+
+@keyframes qv-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.qv-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(220px, 380px) 1fr;
+  width: min(760px, 100%);
+  max-height: min(86vh, 640px);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 94%, black 6%);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 50px 120px rgba(0, 0, 0, 0.6);
+  animation: qv-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes qv-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+.qv-x {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  font-size: 14px;
+  padding: 8px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.qv-x:hover {
+  opacity: 1;
+}
+
+.qv-media {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--bg0) 70%, black);
+}
+
+.qv-carousel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.qv-carousel img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  animation: qv-img-in 0.3s ease;
+}
+
+@keyframes qv-img-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.qv-arw {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg0) 52%, transparent);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(4px);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.qv-arw:hover {
+  background: var(--accent);
+  color: var(--bg0);
+}
+
+.qv-arw.prev { left: 10px; }
+.qv-arw.next { right: 10px; }
+
+.qv-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.qv-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  transition: background-color 0.2s ease;
+}
+
+.qv-dots span.on {
+  background: var(--accent);
+}
+
+.qv-thumbs {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: color-mix(in srgb, var(--bg0) 55%, black);
+}
+
+.qv-thumbs::-webkit-scrollbar { display: none; }
+
+.qv-thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.qv-thumb.on {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.qv-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qv-svg {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  padding: 30px;
+}
+
+.qv-svg .garment-svg {
+  width: min(240px, 70%);
+}
+
+.qv-body {
+  padding: 30px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.qv-kicker {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.3em;
+  opacity: 0.55;
+}
+
+.qv-name {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-transform: var(--display-case);
+  letter-spacing: var(--display-tracking);
+  font-size: clamp(19px, 2.4vw, 26px);
+  line-height: 1.15;
+}
+
+.qv-price {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.qv-price s {
+  opacity: 0.5;
+  margin-right: 6px;
+  color: var(--ink);
+}
+
+.qv-desc {
+  font-size: 13.5px;
+  font-weight: 300;
+  line-height: 1.7;
+  opacity: 0.85;
+}
+
+.qv-caption {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--accent2);
+}
+
+.qv-pick-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.28em;
+  opacity: 0.5;
+  margin: 4px 0 -4px;
+}
+
+.qv-sizes {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.qv-size {
+  min-width: 42px;
+  height: 38px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--ink) 26%, transparent);
+  border-radius: 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink);
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.qv-size.wide {
+  padding: 0 14px;
+  letter-spacing: 0.06em;
+}
+
+.qv-size:hover {
+  border-color: var(--accent);
+}
+
+.qv-size.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg0);
+}
+
+.qv-order {
+  display: block;
+  text-align: center;
+  margin-top: 6px;
+  padding: 15px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg0);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qv-order:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 10px 34px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.qv-note {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.18em;
+  opacity: 0.4;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .qv-card {
+    grid-template-columns: 1fr;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .qv-media {
+    min-height: 220px;
+    max-height: 280px;
+  }
+}
+
+/* ── Footer & dock ──────────────────────────────────────────── */
+
+.album-foot {
+  padding: 34px clamp(22px, 6vw, 80px) 44px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+}
+
+.foot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 26px;
+  padding-bottom: 26px;
+}
+
+.foot-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.foot-brand {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.foot-k {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.3em;
+  color: var(--accent2);
+}
+
+.foot-line {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  opacity: 0.85;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+a.foot-line:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.foot-line.dim {
+  opacity: 0.45;
+}
+
+.foot-base {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 22px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  opacity: 0.8;
+}
+
+/* scoped under .album-page so it outranks the generic
+   `.album-page > :not(.album-bg) { position: relative }` reset */
+.album-page .dock-tt {
+  position: fixed;
+  right: 24px;
+  bottom: 22px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.dock-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.26em;
+  opacity: 0.6;
+}
+
+/* ── Per-album flourishes ───────────────────────────────────── */
+
+.theme-mbdtf .capsule-title::before {
+  content: '❖ ';
+  color: var(--accent2);
+}
+
+.theme-mbdtf .capsule-title::after {
+  content: ' ❖';
+  color: var(--accent2);
+}
+
+.theme-mbdtf .tl-side-label,
+.theme-mbdtf .hero-kicker {
+  color: var(--accent2);
+  opacity: 0.85;
+}
+
+.theme-blonde .hero-title {
+  text-shadow: none;
+}
+
+.theme-blonde .hero-cover-frame {
+  box-shadow:
+    0 40px 110px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* iridescent, holographic — echoes the album's rainbow cover */
+.theme-honestly-nevermind .hero-title,
+.theme-honestly-nevermind .capsule-title {
+  background: linear-gradient(
+    100deg,
+    #ff8fd0 0%,
+    #ffcf8f 26%,
+    #a7f0a6 50%,
+    #8fd8ff 74%,
+    #d79bff 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+.theme-honestly-nevermind .hero-title {
+  font-size: clamp(34px, 3.4vw, 56px);
+  line-height: 0.95;
+  text-transform: none;
+}
+
+.theme-channel-orange .hero-title {
+  line-height: 0.98;
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+
+@media (max-width: 940px) {
+  .album-body {
+    grid-template-columns: 1fr;
+    padding-top: 16px;
+    gap: 0;
+  }
+  /* rail collapses to a compact header card: cover left, story below */
+  .album-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: 104px 1fr;
+    column-gap: 16px;
+    row-gap: 4px;
+    align-items: center;
+    margin-bottom: 26px;
+  }
+  .hero-art {
+    grid-row: span 3;
+    width: 104px;
+    margin-bottom: 0;
+  }
+  .hero-disc {
+    display: none;
+  }
+  .hero-cover-frame {
+    width: 100%;
+  }
+  .hero-kicker {
+    margin-bottom: 0;
+    font-size: 8.5px;
+  }
+  .hero-title {
+    font-size: 20px;
+  }
+  .theme-honestly-nevermind .hero-title {
+    font-size: 24px;
+  }
+  .hero-artist {
+    margin-top: 2px;
+    font-size: 10px;
+  }
+  .hero-story {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    max-width: none;
+  }
+  .hero-actions {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+  }
+  .liner-note {
+    grid-column: 1 / -1;
+  }
+  .album-brand {
+    display: none;
+  }
+  .album-page .dock-tt {
+    right: 12px;
+    bottom: 12px;
+  }
+  .tt-dock {
+    width: 150px;
+  }
+  .dock-label {
+    display: none;
+  }
+  .capsule {
+    padding-bottom: 110px;
+  }
+}

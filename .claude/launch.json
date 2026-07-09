@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vinyl",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "vinyl-fashion", "run", "dev"],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

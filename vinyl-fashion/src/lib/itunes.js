@@ -30,9 +30,10 @@ function parseLookup(json, album) {
 }
 
 // CORS-proof fallback: Apple's ancient-but-official JSONP support.
-function jsonpLookup(id) {
+// A plain <script> tag is immune to CORS/ad-blocker fetch blocking.
+function jsonp(url) {
   return new Promise((resolve, reject) => {
-    const cb = `__vfItunes${id}_${Date.now()}`
+    const cb = `__vfItunes${Math.random().toString(36).slice(2)}`
     const script = document.createElement('script')
     const clean = () => {
       delete window[cb]
@@ -46,7 +47,8 @@ function jsonpLookup(id) {
       clean()
       reject(new Error('jsonp failed'))
     }
-    script.src = `https://itunes.apple.com/lookup?id=${id}&entity=song&limit=200&callback=${cb}`
+    const sep = url.includes('?') ? '&' : '?'
+    script.src = `${url}${sep}callback=${cb}`
     document.head.appendChild(script)
     setTimeout(() => {
       if (window[cb]) {
@@ -55,6 +57,36 @@ function jsonpLookup(id) {
       }
     }, 12000)
   })
+}
+
+const jsonpLookup = (id) =>
+  jsonp(`https://itunes.apple.com/lookup?id=${id}&entity=song&limit=200`)
+
+// Admin library search: find albums by artist/title (fetch → JSONP
+// fallback). Runs from the admin's own browser, so it's per-device and
+// can't drain a shared quota. Returns lightweight rows the New-capsule
+// panel imports; the tracklist is pulled on import via lookupCollection.
+export async function searchAlbums(term, limit = 24) {
+  const q = term.trim()
+  if (!q) return []
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=${limit}`
+  let json
+  try {
+    const res = await fetch(url)
+    json = await res.json()
+  } catch {
+    json = await jsonp(url)
+  }
+  return (json?.results || [])
+    .filter((r) => r.collectionId && r.collectionName)
+    .map((r) => ({
+      collectionId: r.collectionId,
+      artist: r.artistName,
+      title: r.collectionName,
+      year: Number((r.releaseDate || '').slice(0, 4)) || null,
+      artwork: (r.artworkUrl100 || '').replace('100x100bb', '1200x1200bb'),
+      trackCount: r.trackCount || null,
+    }))
 }
 
 // Admin/Studio: look up a whole collection by iTunes id and return

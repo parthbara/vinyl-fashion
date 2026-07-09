@@ -5,6 +5,8 @@
 // null if the image can't be read (e.g. a cross-origin cover taints the
 // canvas) so the Studio can fall back to manual entry.
 
+import { useEffect, useState } from 'react'
+
 const clamp = (n) => Math.max(0, Math.min(255, Math.round(n)))
 const hex = (r, g, b) => '#' + [r, g, b].map((v) => clamp(v).toString(16).padStart(2, '0')).join('')
 
@@ -84,4 +86,53 @@ export async function extractPalette(src) {
     glow: hex(...glow),
     paper: hex(...paper),
   }
+}
+
+// ── Live cover palette (storefront) ──────────────────────────────
+// Imported capsules ship with a generic default palette, so their
+// Coming-Soon teaser looked identical for every album. This derives a
+// palette straight from the cover at display time and caches it per
+// device, so each teaser morphs to its own record's colours.
+const PMEM = new Map()
+const PCACHE = 'vf.palette.v1.'
+const PTTL = 30 * 24 * 3600 * 1000
+
+export async function coverPalette(album) {
+  const key = album?.id
+  if (!key) return null
+  if (PMEM.has(key)) return PMEM.get(key)
+  try {
+    const c = JSON.parse(localStorage.getItem(PCACHE + key))
+    if (c && Date.now() - c.t < PTTL) {
+      PMEM.set(key, c.p)
+      return c.p
+    }
+  } catch {
+    /* corrupt cache — re-extract */
+  }
+  const src = (album.artwork || '').replace('1200x1200bb', '200x200bb') || null
+  let p = null
+  if (src) p = await extractPalette(src)
+  PMEM.set(key, p)
+  try {
+    if (p) localStorage.setItem(PCACHE + key, JSON.stringify({ t: Date.now(), p }))
+  } catch {
+    /* storage full — fine */
+  }
+  return p
+}
+
+// Returns a cover-derived palette (or null until it resolves); callers
+// fall back to the album's stored palette meanwhile.
+export function useCoverPalette(album) {
+  const [p, setP] = useState(() => PMEM.get(album?.id) ?? null)
+  useEffect(() => {
+    let live = true
+    coverPalette(album).then((res) => live && res && setP(res))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album?.id])
+  return p
 }

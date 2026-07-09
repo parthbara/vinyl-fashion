@@ -18,6 +18,7 @@ export default function CoverImage({
   draggable = false,
   size = 'full',
   lowRes = false, // legacy alias for size="low"
+  loading = 'eager', // 'lazy' in dense grids (the crate wall) to defer offscreen fetches
 }) {
   const [, bump] = useState(0)
   const dim = SIZES[lowRes ? 'low' : size] || SIZES.full
@@ -47,7 +48,7 @@ export default function CoverImage({
       src={src}
       alt={`${album.artist} — ${album.title}`}
       draggable={draggable}
-      loading="eager"
+      loading={loading}
       decoding="async"
       onError={() => {
         deadUrls.add(src)

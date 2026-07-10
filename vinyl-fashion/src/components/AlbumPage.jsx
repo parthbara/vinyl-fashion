@@ -18,6 +18,7 @@ import * as sfx from '../lib/sfx'
 export default function AlbumPage({ album, revealOrigin, closing, onClose, onClosed }) {
   const rootRef = useRef(null)
   const dockRef = useRef(null)
+  const lastVolRef = useRef(0.9) // level to restore after a mute
   const revealedRef = useRef(false)
   const data = useAlbumData(album)
   const tracks = data?.tracks ?? []
@@ -224,7 +225,19 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
         <Turntable album={album} size="dock" playing={playingThis} onToggle={toggle} />
         <span className="dock-label">{playingThis ? 'ON THE PLATTER' : 'NEEDLE UP'}</span>
         <div className="dock-vol" title={`Volume ${Math.round(volume * 100)}%`}>
-          <span className="dock-vol-ico" aria-hidden="true">{volume === 0 ? '🔇' : '🔊'}</span>
+          <button
+            type="button"
+            className="dock-vol-ico"
+            aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+            onClick={() => {
+              if (volume > 0) {
+                lastVolRef.current = volume
+                setVolume(0)
+              } else setVolume(lastVolRef.current || 0.9)
+            }}
+          >
+            {volume === 0 ? '🔇' : '🔊'}
+          </button>
           <input
             type="range"
             className="dock-vol-slider"

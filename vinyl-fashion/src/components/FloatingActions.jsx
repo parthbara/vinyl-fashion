@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ALBUMS } from '../data/albums'
 import { BRAND, CONTACT, waLink } from '../config'
+import { useAlbums } from '../lib/useAlbums'
+import { trackOrder } from '../lib/db'
 import * as sfx from '../lib/sfx'
 
 // nariposhak-style corner dock: a small AI style assistant and a
@@ -12,31 +13,40 @@ const GREETING = {
   text: `Hey — I'm the ${BRAND.name} atelier assistant. Ask about any capsule, sizing, or a drop date, or tap WhatsApp to reach a human.`,
 }
 
-const SUGGESTIONS = ['What capsules are out?', 'When do clothes drop?', 'Talk to a human']
+const SUGGESTIONS = ['What capsules are out?', 'Track my order', 'Talk to a human']
 
-function answer(raw) {
+// answers read the LIVE crate (DB + imports), not the built-in seed
+function answer(raw, albums) {
   const q = raw.toLowerCase()
 
-  const album = ALBUMS.find(
+  const album = albums.find(
     (a) =>
       q.includes(a.title.toLowerCase()) ||
       q.includes(a.artist.toLowerCase()) ||
-      a.artist.toLowerCase().split(' ').some((w) => w.length > 2 && q.includes(w))
+      a.artist.toLowerCase().split(' ').some((w) => w.length > 3 && q.includes(w))
   )
   if (album) {
-    return `The ${album.title} capsule (cut to ${album.artist}) — ${album.story} Pieces are in development; tap WhatsApp for first dibs when it drops.`
+    if (album.comingSoon) {
+      return `${album.title} (${album.artist}) is on the Coming-Soon wall — the capsule drops with the record. Tap WhatsApp and we'll put you first in line.`
+    }
+    return `The ${album.title} capsule (cut to ${album.artist}) is live — pull the record in the shop to see its pieces${album.story ? `. ${album.story}` : '.'}`
+  }
+  if (/(track|where.*order|order.*status)/.test(q)) {
+    return 'Tap “◷ TRACK AN ORDER” just below — enter your order code (like VF-3F9A2) and the phone you ordered with.'
   }
   if (/(drop|release|when|available|stock|buy|order)/.test(q)) {
-    return 'Each capsule releases with its record. Drop dates are TBA and announced to WhatsApp first — message us to get on the list.'
+    return 'Each capsule releases with its record. Drop dates are announced to WhatsApp first — message us to get on the list.'
   }
   if (/(size|sizing|fit|measurement)/.test(q)) {
-    return 'Full size runs land with each drop. Tell us your usual size on WhatsApp and we\'ll flag the right fit for you.'
+    return 'Every piece lists its real size run on its card — tap a garment to see sizes and colours. Unsure between two? Tell us on WhatsApp and we\'ll flag the right fit.'
   }
   if (/(capsule|out|collection|what|catalog|catalogue)/.test(q)) {
-    return `Four capsules are live to explore: ${ALBUMS.map((a) => a.title).join(', ')}. Pull any record in the shop to see its pieces.`
+    const live = albums.filter((a) => !a.comingSoon)
+    const soon = albums.length - live.length
+    return `${live.length} capsule${live.length === 1 ? ' is' : 's are'} live: ${live.map((a) => a.title).join(', ')}${soon > 0 ? ` — plus ${soon} more records on the Coming-Soon wall.` : '.'}`
   }
   if (/(hi|hello|hey|yo|namaste)/.test(q)) {
-    return 'Hey! Ask me about a capsule or a drop date — or tap WhatsApp to talk to the team.'
+    return 'Hey! Ask me about a capsule, track an order, or tap WhatsApp to talk to the team.'
   }
   return 'Good question — the team can answer that fastest on WhatsApp. Tap the green button below and we\'ll jump in.'
 }
@@ -45,6 +55,12 @@ export default function FloatingActions() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([GREETING])
   const [draft, setDraft] = useState('')
+  const albums = useAlbums()
+  // order tracking (uses the track_order RPC that ships with the schema)
+  const [trackOpen, setTrackOpen] = useState(false)
+  const [tCode, setTCode] = useState('')
+  const [tPhone, setTPhone] = useState('')
+  const [tracking, setTracking] = useState(false)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const dockRef = useRef(null)
@@ -73,11 +89,48 @@ export default function FloatingActions() {
     }
   }, [open])
 
+  const say = (text) => setMessages((m) => [...m, { from: 'bot', text }])
+
+  const runTrack = async () => {
+    const code = tCode.trim().toUpperCase()
+    const phone = tPhone.trim()
+    if (!code || !phone) return
+    setTracking(true)
+    sfx.tick()
+    setMessages((m) => [...m, { from: 'me', text: `Track ${code}` }])
+    try {
+      const data = await trackOrder(code, phone)
+      const o = Array.isArray(data) ? data[0] : data
+      if (!o) {
+        say(`No order found for ${code} with that phone — double-check both, or ask us on WhatsApp.`)
+      } else {
+        const items = (o.items || o.order_items || []).map((i) => `${i.qty || 1}× ${i.title}`).join(', ')
+        say(
+          `Order ${code} is ${String(o.status || 'received').toUpperCase()}.` +
+            (items ? ` Items: ${items}.` : '') +
+            (o.total ? ` Total NPR ${o.total}.` : '') +
+            ' Questions? WhatsApp us anytime.'
+        )
+        setTrackOpen(false)
+      }
+    } catch {
+      say('Tracking is having a moment — try again, or message us on WhatsApp and we\'ll check by hand.')
+    }
+    setTracking(false)
+  }
+
   const send = (text) => {
     const clean = text.trim()
     if (!clean) return
+    if (/track my order/i.test(clean)) {
+      sfx.tick()
+      setMessages((m) => [...m, { from: 'me', text: clean }])
+      setTrackOpen(true)
+      say('Sure — enter your order code and the phone number you ordered with below.')
+      return
+    }
     sfx.tick()
-    const reply = answer(clean)
+    const reply = answer(clean, albums)
     setMessages((m) => [...m, { from: 'me', text: clean }, { from: 'bot', typing: true }])
     setDraft('')
     // brief "typing" beat so replies feel considered, not canned
@@ -129,7 +182,36 @@ export default function FloatingActions() {
                 {s}
               </button>
             ))}
+            <button className="chip" onClick={() => setTrackOpen((t) => !t)}>◷ TRACK AN ORDER</button>
           </div>
+
+          {trackOpen && (
+            <form
+              className="assistant-track"
+              onSubmit={(e) => {
+                e.preventDefault()
+                runTrack()
+              }}
+            >
+              <input
+                value={tCode}
+                onChange={(e) => setTCode(e.target.value)}
+                placeholder="Order code · VF-XXXXX"
+                aria-label="Order code"
+                autoCapitalize="characters"
+              />
+              <input
+                value={tPhone}
+                onChange={(e) => setTPhone(e.target.value)}
+                placeholder="Phone used to order"
+                aria-label="Phone"
+                inputMode="tel"
+              />
+              <button type="submit" disabled={tracking || !tCode.trim() || !tPhone.trim()}>
+                {tracking ? '…' : 'CHECK'}
+              </button>
+            </form>
+          )}
 
           <form
             className="assistant-input"

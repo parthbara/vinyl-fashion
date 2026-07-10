@@ -526,6 +526,10 @@ function SearchBox({ search, onPick, onSubmit }) {
         type="search"
         placeholder="ARTIST · ALBUM · SONG"
         aria-label="Search the crate"
+        enterKeyHint="search"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
         value={q}
         onChange={(e) => {
           setQ(e.target.value)

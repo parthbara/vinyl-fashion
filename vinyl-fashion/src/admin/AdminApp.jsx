@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ALBUMS, makePlaceholderCapsule } from '../data/albums'
 import { CURATED_ALBUMS } from '../data/curatedAlbums'
 import baked from '../data/tracks.json'
@@ -20,6 +20,8 @@ import {
   addProduct,
   updateProduct,
   deleteProduct,
+  updateVariant,
+  duplicateProduct,
   fetchAlbumRows,
   importSeedAlbums,
   updateAlbumRow,
@@ -484,6 +486,9 @@ function AddStock() {
   const [sizeInput, setSizeInput] = useState('')
   const [colorRows, setColorRows] = useState([])
   const [openPicker, setOpenPicker] = useState(null) // index of the open colour wheel
+  // per-variant stock grid: "colour¦size" → count ('' while being edited).
+  // untouched cells default to 1, like a fresh pressing of each combo.
+  const [cells, setCells] = useState({})
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   // sizes/colors are freeform and kept as ordered, de-duped chip lists
@@ -513,6 +518,23 @@ function AddStock() {
         .filter((c) => !c.name.trim() || !rs.some((r) => r.name.trim().toLowerCase() === c.name.trim().toLowerCase()))
         .map((c) => ({ file: null, ...c })),
     ])
+  // ── stock-per-variant grid (colour rows × sizes) ────────────────
+  const namedColors = colorRows.filter((r) => r.name.trim())
+  const showMatrix = namedColors.length > 0 || f.sizes.length > 0
+  const effColors = namedColors.length ? namedColors : [null] // null = "all colours"
+  const effSizes = f.sizes.length ? f.sizes : [null] // null = one-size
+  const cellKey = (r, sz) => `${r ? r.name.trim() : ''}¦${sz || ''}`
+  const cellShown = (k) => (cells[k] === undefined ? 1 : cells[k])
+  const cellNum = (k) => {
+    const v = cells[k]
+    if (v === undefined) return 1
+    const n = Math.floor(Number(v))
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  const matrixTotal = showMatrix
+    ? effColors.reduce((s, r) => s + effSizes.reduce((t, sz) => t + cellNum(cellKey(r, sz)), 0), 0)
+    : Number(f.stock) || 0
+
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
@@ -539,10 +561,22 @@ function AddStock() {
     try {
       // colour labels encode swatch + which uploaded photo is theirs:
       // "Name|#hex|imageIndex" — colour photos ride after the main set
-      const cRows = colorRows.filter((r) => r.name.trim())
+      const cRows = namedColors
       let nextIdx = files.length
-      const colorLabels = cRows.map((r) => `${r.name.trim()}|${r.hex || ''}|${r.file ? nextIdx++ : ''}`)
+      const labelOf = new Map()
+      cRows.forEach((r) => labelOf.set(r, `${r.name.trim()}|${r.hex || ''}|${r.file ? nextIdx++ : ''}`))
       const allFiles = [...files, ...cRows.filter((r) => r.file).map((r) => r.file)]
+      // every colour × size combo becomes its own variant row carrying
+      // its own stock — the grid the ledger and storefront read from
+      const combos = showMatrix
+        ? effColors.flatMap((r) =>
+            effSizes.map((sz) => ({
+              color: r ? `color:${labelOf.get(r)}` : null,
+              size: sz || null,
+              stock: cellNum(cellKey(r, sz)),
+            }))
+          )
+        : null
       await addProduct(
         {
           title: f.title.trim(),
@@ -551,20 +585,20 @@ function AddStock() {
           category: f.category || null,
           price: Number(f.price) || 0,
           sale_price: f.sale_price ? Number(f.sale_price) : null,
-          stock: Number(f.stock) || 0,
+          stock: matrixTotal, // product total = sum of the variant grid
           description: f.description || null,
           ai_info: f.ai_info || null,
           caption: f.caption || null,
         },
         allFiles,
         f.variants.split(','),
-        colorLabels,
-        f.sizes
+        combos
       )
       setMsg({ ok: true, text: `“${f.title}” added to the ${f.album_id} capsule.` })
       setF({ ...EMPTY, album_id: f.album_id })
       setFiles([])
       setColorRows([])
+      setCells({})
       if (fileRef.current) fileRef.current.value = ''
     } catch (ex) {
       setMsg({ ok: false, text: ex.message })
@@ -615,7 +649,11 @@ function AddStock() {
       </div>
       <div className="adm-field"><label>PRICE (NPR)</label><input required type="number" min="0" value={f.price} onChange={set('price')} /></div>
       <div className="adm-field"><label>SALE PRICE (optional)</label><input type="number" min="0" value={f.sale_price} onChange={set('sale_price')} /></div>
-      <div className="adm-field"><label>STOCK COUNT</label><input type="number" min="0" value={f.stock} onChange={set('stock')} /></div>
+      <div className="adm-field"><label>{showMatrix ? 'STOCK (auto — from the grid below)' : 'STOCK COUNT'}</label>
+        {showMatrix
+          ? <input value={matrixTotal} readOnly style={{ opacity: 0.65 }} />
+          : <input type="number" min="0" value={f.stock} onChange={set('stock')} />}
+      </div>
       <div className="adm-field"><label>CATEGORY</label>
         {cats.length ? (
           <select value={f.category} onChange={set('category')}>
@@ -712,6 +750,48 @@ function AddStock() {
           <button type="button" onClick={() => addSizes('Free')}>Free size</button>
         </div>
       </div>
+
+      {showMatrix && (
+        <div className="adm-field full">
+          <label>STOCK PER VARIANT · <b>total {matrixTotal}</b> — each colour × size combo holds its own count</label>
+          <div className="adm-matrix-wrap">
+            <table className="adm-matrix">
+              <thead>
+                <tr>
+                  <th>{namedColors.length ? 'COLOUR ⟍ SIZE' : ''}</th>
+                  {effSizes.map((sz) => <th key={sz || 'one'}>{sz || 'ONE-SIZE'}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {effColors.map((r, ri) => (
+                  <tr key={ri}>
+                    <th>
+                      {r ? (<><i className="adm-dot" style={{ background: r.hex || '#888' }} />{r.name}</>) : 'ALL'}
+                    </th>
+                    {effSizes.map((sz) => {
+                      const k = cellKey(r, sz)
+                      return (
+                        <td key={k}>
+                          <input
+                            type="number"
+                            min="0"
+                            value={cellShown(k)}
+                            className={cellNum(k) === 0 ? 'out' : ''}
+                            onChange={(e) => setCells((c) => ({ ...c, [k]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                          />
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="adm-note" style={{ marginTop: 6 }}>Set a cell to 0 to mark that combo sold out — shoppers see it greyed.</p>
+        </div>
+      )}
+
       <p className="adm-note full" style={{ marginTop: -4 }}>
         The PHOTOS field below is the main carousel — <b>first = cover, then one per design in order</b>.
         Each colour&apos;s own photo (from its row above) is appended automatically and the storefront
@@ -721,7 +801,17 @@ function AddStock() {
       <div className="adm-field full">
         <label>PHOTOS (compressed to WebP ≤1600px automatically · first = cover)</label>
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={(e) => setFiles([...e.target.files])} />
-        {!!previews.length && <div className="adm-thumbs" style={{ marginTop: 8 }}>{previews.map((u) => <img key={u} src={u} alt="" />)}</div>}
+        {!!previews.length && (
+          <div className="adm-thumbs" style={{ marginTop: 8 }}>
+            {previews.map((u, i) => (
+              <span className="adm-thumb" key={u}>
+                <img src={u} alt="" />
+                {i === 0 && <b>COVER</b>}
+                <button type="button" aria-label="Remove photo" onClick={() => setFiles((fs) => fs.filter((_, j) => j !== i))}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       {msg && <div className={`full ${msg.ok ? 'adm-ok' : 'adm-err'}`}>{msg.text}</div>}
       <div className="full"><button className="adm-btn" disabled={busy}>{busy ? 'UPLOADING…' : '＋ ADD STOCK ITEM'}</button></div>
@@ -730,10 +820,86 @@ function AddStock() {
 }
 
 // ── ledger ───────────────────────────────────────────────────────
+// parse a variant row back into something readable: colour name+swatch,
+// design label, size — whatever the row carries
+const parseVariant = (v) => {
+  const c = v.color || ''
+  const body = c.replace(/^(design|color):/, '')
+  const [nm, hex] = body.split('|')
+  return {
+    kind: c.startsWith('design:') ? 'design' : c ? 'colour' : 'size',
+    name: (nm || '').trim(),
+    hex: (hex || '').trim() || null,
+    size: v.size || null,
+  }
+}
+
+// stock units live on colour/size rows; design rows are just labels
+const isStockRow = (v) => !(v.color || '').startsWith('design:') && ((v.color || '').startsWith('color:') || v.size)
+
+function VariantPanel({ p, onChanged }) {
+  const rows = (p.product_variants || []).filter(isStockRow)
+  const designs = (p.product_variants || []).filter((v) => !isStockRow(v))
+  const [stocks, setStocks] = useState(() => Object.fromEntries(rows.map((v) => [v.id, v.stock ?? 0])))
+  const [saving, setSaving] = useState(false)
+
+  const bump = (id, d) => setStocks((s) => ({ ...s, [id]: Math.max(0, (Number(s[id]) || 0) + d) }))
+  const dirty = rows.some((v) => Number(stocks[v.id]) !== Number(v.stock ?? 0))
+  const total = rows.reduce((s, v) => s + (Number(stocks[v.id]) || 0), 0)
+
+  const saveAll = async () => {
+    setSaving(true)
+    try {
+      for (const v of rows) {
+        if (Number(stocks[v.id]) !== Number(v.stock ?? 0)) await updateVariant(v.id, { stock: Number(stocks[v.id]) || 0 })
+      }
+      // keep the product's headline stock = sum of its variant grid
+      await updateProduct(p.id, { stock: total })
+      onChanged()
+    } catch (e) { alert(e.message) }
+    setSaving(false)
+  }
+
+  if (!rows.length) return <p className="adm-note" style={{ padding: '6px 4px' }}>No colour/size variants on this product — the STOCK column above is the single count.</p>
+
+  return (
+    <div className="adm-var-panel">
+      {rows.map((v) => {
+        const info = parseVariant(v)
+        const n = Number(stocks[v.id]) || 0
+        return (
+          <div className={`adm-var-chip ${n === 0 ? 'out' : n <= 2 ? 'low' : ''}`} key={v.id}>
+            <span className="adm-var-label">
+              {info.hex && <i className="adm-dot" style={{ background: info.hex }} />}
+              {info.name || 'ALL'}{info.size ? ` · ${info.size}` : ''}
+            </span>
+            <span className="adm-step">
+              <button type="button" onClick={() => bump(v.id, -1)} aria-label="minus">−</button>
+              <input
+                type="number" min="0" value={stocks[v.id]}
+                onChange={(e) => setStocks((s) => ({ ...s, [v.id]: e.target.value }))}
+              />
+              <button type="button" onClick={() => bump(v.id, +1)} aria-label="plus">＋</button>
+            </span>
+          </div>
+        )
+      })}
+      <div className="adm-var-foot">
+        {designs.length > 0 && <span className="adm-note">designs: {designs.map((d) => parseVariant(d).name).join(', ')}</span>}
+        <span className="adm-note">grid total: <b>{total}</b></span>
+        <button type="button" className="adm-btn" disabled={!dirty || saving} onClick={saveAll}>
+          {saving ? 'SAVING…' : dirty ? 'SAVE STOCK' : 'SAVED ✓'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Ledger() {
   const { busy, data, err, reload } = useLoad(fetchAllProducts)
   const [q, setQ] = useState('')
   const [album, setAlbum] = useState('all')
+  const [open, setOpen] = useState(null) // product id with the variant grid open
   if (err) return <Err err={err} retry={reload} />
   const all = data || []
   const albumIds = [...new Set(all.map((p) => p.album_id).filter(Boolean))].sort()
@@ -744,6 +910,8 @@ function Ledger() {
   )
   const units = products.reduce((s, p) => s + (p.stock || 0), 0)
   const value = products.reduce((s, p) => s + (p.stock || 0) * Number(p.sale_price ?? p.price ?? 0), 0)
+  const lowCount = products.filter((p) => (p.stock ?? 0) > 0 && p.stock <= 2).length
+  const outCount = products.filter((p) => (p.stock ?? 0) === 0 || p.status === 'soldout').length
 
   const save = async (id, patch) => {
     try {
@@ -754,11 +922,25 @@ function Ledger() {
     }
   }
 
+  const exportCsv = () => {
+    const csv = ['title,capsule,category,price,sale_price,stock,status,variants']
+      .concat(products.map((p) => [
+        p.title, p.album_id, p.category || '', p.price, p.sale_price ?? '', p.stock, p.status,
+        (p.product_variants || []).map((v) => { const i = parseVariant(v); return `${i.name}${i.size ? '/' + i.size : ''}:${v.stock ?? 0}` }).join(' | '),
+      ].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')))
+      .join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = 'vinyl-fashion-stock.csv'
+    a.click()
+  }
+
   return (
     <>
       <div className="adm-stats">
         <Stat k="PRODUCTS" v={products.length} />
         <Stat k="UNITS" v={units} />
+        <Stat k="LOW / OUT" v={`${lowCount} / ${outCount}`} />
         <Stat k="STOCK VALUE" v={npr(value)} gold />
       </div>
       <div className="adm-toolbar">
@@ -767,34 +949,49 @@ function Ledger() {
           <option value="all">All capsules</option>
           {albumIds.map((id) => <option key={id} value={id}>{id}</option>)}
         </select>
+        <button className="adm-btn ghost" onClick={exportCsv}>⤓ EXPORT CSV</button>
         <button className="adm-btn ghost" onClick={reload}>↻</button>
       </div>
       <div className="adm-card" style={{ padding: 6 }}>
         <table className="adm-table">
-          <thead><tr><th>PRODUCT</th><th>CAPSULE</th><th>CATEGORY</th><th>PRICE</th><th>SALE</th><th>STOCK</th><th>STATUS</th><th>DESIGNS</th><th>PHOTOS</th><th /></tr></thead>
+          <thead><tr><th>PRODUCT</th><th>CAPSULE</th><th>PRICE</th><th>SALE</th><th>STOCK</th><th>STATUS</th><th>VARIANTS</th><th>PHOTOS</th><th /></tr></thead>
           <tbody>
-            {products.map((p) => (
-              <tr key={p.id}>
-                <td><b>{p.title}</b></td>
+            {products.map((p) => {
+              const vCount = (p.product_variants || []).filter(isStockRow).length
+              return (
+              <Fragment key={p.id}>
+              <tr className={open === p.id ? 'is-open' : ''}>
+                <td><b>{p.title}</b>{p.category ? <span className="adm-note"> · {p.category}</span> : null}</td>
                 <td className="adm-mono">{p.album_id || '—'}</td>
-                <td className="adm-mono">{p.category || '—'}</td>
                 <td><input type="number" defaultValue={p.price} onBlur={(e) => Number(e.target.value) !== Number(p.price) && save(p.id, { price: Number(e.target.value) })} /></td>
                 <td><input type="number" defaultValue={p.sale_price ?? ''} placeholder="—" onBlur={(e) => save(p.id, { sale_price: e.target.value === '' ? null : Number(e.target.value) })} /></td>
-                <td><input type="number" defaultValue={p.stock} onBlur={(e) => Number(e.target.value) !== Number(p.stock) && save(p.id, { stock: Number(e.target.value) })} /></td>
+                <td>
+                  <span className={`adm-stock-cell ${(p.stock ?? 0) === 0 ? 'out' : p.stock <= 2 ? 'low' : ''}`}>
+                    <input type="number" defaultValue={p.stock} onBlur={(e) => Number(e.target.value) !== Number(p.stock) && save(p.id, { stock: Number(e.target.value) })} />
+                    {(p.stock ?? 0) === 0 ? <b>OUT</b> : p.stock <= 2 ? <b>LOW</b> : null}
+                  </span>
+                </td>
                 <td>
                   <select defaultValue={p.status} onChange={(e) => save(p.id, { status: e.target.value })}>
                     {['active', 'hidden', 'soldout'].map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </td>
-                <td className="adm-mono" title={(p.product_variants || []).map((v) => (v.color || '').replace(/^(design|color):/, '')).join(', ') || '—'}>
-                  {(p.product_variants || []).length || '—'}
+                <td>
+                  {vCount
+                    ? <button type="button" className="adm-btn ghost sm" onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? '▾' : '▸'} {vCount}</button>
+                    : <span className="adm-mono">—</span>}
                 </td>
                 <td className="adm-mono">{(p.images || []).length}</td>
-                <td>
+                <td className="adm-row-acts">
+                  <button className="adm-btn ghost sm" title="Duplicate (lands hidden)" onClick={() => duplicateProduct(p).then(reload).catch((e) => alert(e.message))}>⧉</button>
                   <button className="adm-btn danger" onClick={() => window.confirm(`Remove “${p.title}”?`) && deleteProduct(p.id).then(reload)}>✕</button>
                 </td>
               </tr>
-            ))}
+              {open === p.id && (
+                <tr className="adm-var-tr"><td colSpan="9"><VariantPanel p={p} onChanged={reload} /></td></tr>
+              )}
+              </Fragment>
+            )})}
             {!busy && !products.length && <tr><td colSpan="9" className="adm-note" style={{ padding: 20 }}>Ledger is empty — add stock first.</td></tr>}
           </tbody>
         </table>

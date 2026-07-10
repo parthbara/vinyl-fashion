@@ -582,6 +582,167 @@
   color: #d8a548;
 }
 
+/* ── photo previews with per-photo remove ───────────────────────── */
+.adm-thumb {
+  position: relative;
+  display: inline-block;
+}
+.adm-thumb b {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #d8a548;
+}
+.adm-thumb button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.adm-thumb button:hover {
+  background: rgba(180, 40, 40, 0.85);
+}
+
+/* ── stock-per-variant matrix (add stock) ───────────────────────── */
+.adm-matrix-wrap {
+  overflow-x: auto;
+}
+.adm-matrix {
+  border-collapse: collapse;
+}
+.adm-matrix th,
+.adm-matrix td {
+  border: 1px solid rgba(242, 236, 226, 0.12);
+  padding: 6px 8px;
+  font-size: 11px;
+  text-align: left;
+}
+.adm-matrix thead th {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+.adm-matrix tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.adm-matrix td input {
+  width: 64px;
+  padding: 6px 8px;
+}
+.adm-matrix td input.out {
+  color: #e88;
+  border-color: rgba(238, 136, 136, 0.5);
+}
+
+.adm-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  vertical-align: -1px;
+}
+
+/* ── ledger: variant stock panel ────────────────────────────────── */
+.adm-var-tr > td {
+  background: rgba(0, 0, 0, 0.25);
+}
+.adm-var-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 6px;
+}
+.adm-var-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(242, 236, 226, 0.16);
+  border-radius: 9px;
+  padding: 5px 8px;
+}
+.adm-var-chip.low {
+  border-color: rgba(216, 165, 72, 0.55);
+}
+.adm-var-chip.out {
+  border-color: rgba(238, 136, 136, 0.55);
+}
+.adm-var-label {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.adm-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.adm-step button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(242, 236, 226, 0.25);
+  background: transparent;
+  color: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.adm-step input {
+  width: 52px;
+  padding: 4px 6px;
+  text-align: center;
+}
+.adm-var-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+/* ledger stock badges + row actions */
+.adm-stock-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.adm-stock-cell b {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+.adm-stock-cell.low b {
+  color: #d8a548;
+  border: 1px solid rgba(216, 165, 72, 0.5);
+}
+.adm-stock-cell.out b {
+  color: #e88;
+  border: 1px solid rgba(238, 136, 136, 0.5);
+}
+.adm-btn.sm {
+  padding: 5px 9px;
+  font-size: 10px;
+}
+.adm-row-acts {
+  display: flex;
+  gap: 6px;
+}
+
 /* ── the colour wheel picker ────────────────────────────────────── */
 .cp {
   margin: 10px 0 4px;

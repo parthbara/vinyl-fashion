@@ -733,6 +733,42 @@ html.has-custom-cursor * {
   border-color: var(--ink);
 }
 
+/* inline order-tracking form inside the assistant */
+.assistant-track {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 10px;
+}
+
+.assistant-track input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+
+.assistant-track button {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.assistant-track button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .assistant-input {
   display: flex;
   gap: 8px;

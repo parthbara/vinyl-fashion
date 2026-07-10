@@ -53,6 +53,20 @@ function normalizeProduct(row) {
       }
     }),
     sizes: [...new Set(variants.map((v) => v.size).filter(Boolean))],
+    // per-combo stock: "colourName¦size" → count ('' for a missing half).
+    // Legacy rows without combos simply leave this sparse — unknown
+    // combos are treated as available.
+    stockMap: variants.reduce((m, v) => {
+      if ((v.color || '').startsWith('design:')) return m
+      const cname = (v.color || '').startsWith('color:')
+        ? v.color.slice('color:'.length).split('|')[0].trim()
+        : ''
+      const size = v.size || ''
+      if (!cname && !size) return m
+      const key = `${cname}¦${size}`
+      m[key] = (m[key] || 0) + (v.stock ?? 0)
+      return m
+    }, {}),
     soldOut: row.status === 'soldout' || row.stock === 0,
   }
 }

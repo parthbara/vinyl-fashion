@@ -932,6 +932,39 @@
   animation: none;
 }
 
+/* ── wall filter chips (ALL / AVAILABLE / COMING SOON) ─────────── */
+.crate-filters {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.crate-filter {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--ink);
+  opacity: 0.75;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.crate-filter:hover {
+  opacity: 1;
+}
+
+.crate-filter.on {
+  background: var(--ink);
+  color: var(--bg0);
+  border-color: var(--ink);
+  opacity: 1;
+}
+
 @keyframes jacket-sheen {
   0%, 62% { background-position: 130% 0; }
   82%, 100% { background-position: -40% 0; }

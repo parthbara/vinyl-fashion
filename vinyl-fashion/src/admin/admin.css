@@ -582,6 +582,28 @@
   color: #d8a548;
 }
 
+/* one-click coming-soon flip on the album card head */
+.adm-soon-toggle {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+.adm-soon-toggle.soon {
+  color: #d8a548;
+  border: 1px solid rgba(216, 165, 72, 0.55);
+}
+.adm-soon-toggle.open {
+  color: #7bd88f;
+  border: 1px solid rgba(123, 216, 143, 0.45);
+}
+.adm-soon-toggle:hover {
+  filter: brightness(1.25);
+}
+
 /* ── photo previews with per-photo remove ───────────────────────── */
 .adm-thumb {
   position: relative;

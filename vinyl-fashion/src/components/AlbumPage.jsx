@@ -42,6 +42,15 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
     else if (featured) playTrack(album, featured)
   }
 
+  // the record names the tab while it's open (and any shared link)
+  useEffect(() => {
+    const prev = document.title
+    document.title = `${album.title.toUpperCase()} · ${album.artist} — VINYL FASHION`
+    return () => {
+      document.title = prev
+    }
+  }, [album.title, album.artist])
+
   useLayoutEffect(() => {
     window.scrollTo(0, 0)
   }, [])
@@ -96,6 +105,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
   // tuck the corner deck away once you reach the footer, so it never
   // sits on top of the RETURN button / fine print
   const [dockTucked, setDockTucked] = useState(false)
+  const [shared, setShared] = useState(false) // "link copied" flash
   useEffect(() => {
     const onScroll = () => {
       const doc = document.documentElement
@@ -170,6 +180,26 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
                 <i />
               </span>
               {playingThis ? 'NOW SPINNING' : 'DROP THE NEEDLE'} — {songName.toUpperCase()}
+            </button>
+            <button
+              className="share-chip"
+              data-cursor="open"
+              onClick={async () => {
+                const url = `${window.location.origin}${window.location.pathname}#${album.id}`
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: `${album.title} — ${album.artist}`, url })
+                  } else {
+                    await navigator.clipboard.writeText(url)
+                    setShared(true)
+                    setTimeout(() => setShared(false), 1600)
+                  }
+                } catch {
+                  /* share sheet dismissed */
+                }
+              }}
+            >
+              {shared ? '✓ LINK COPIED' : '⤴ SHARE THIS CAPSULE'}
             </button>
           </div>
         </aside>

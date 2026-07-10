@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SHOP_THEME } from './data/albums'
 import { applyTheme, setThemeInstant } from './lib/theme'
+import { useAlbums } from './lib/useAlbums'
 import { useAudio } from './lib/player'
 import * as sfx from './lib/sfx'
 import Intro from './components/Intro'
@@ -26,6 +27,24 @@ export default function App() {
   const [originRect, setOriginRect] = useState(null)
   const [revealOrigin, setRevealOrigin] = useState(null)
   const { stop } = useAudio()
+  const albums = useAlbums()
+
+  // Shareable capsule links: /#<album-id> opens that record directly
+  // (skipping the intro). Seeds resolve instantly; imported records
+  // catch on the next albums tick once the DB list lands.
+  useEffect(() => {
+    const slug = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim()
+    if (!slug) return
+    const album = albums.find((a) => a.id === slug)
+    if (!album || album.comingSoon) return
+    setPhase((p) => {
+      if (p !== 'intro') return p
+      setActive(album)
+      applyTheme(album, { duration: 0.6 })
+      setRevealOrigin({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      return 'album'
+    })
+  }, [albums])
 
   useEffect(() => {
     setThemeInstant(SHOP_THEME)
@@ -56,6 +75,8 @@ export default function App() {
       setActive(album)
       setOriginRect(rect)
       applyTheme(album, { duration: 1.5 })
+      // the record's shareable address
+      window.history.replaceState(null, '', `#${album.id}`)
       return 'opening'
     })
   }, [])
@@ -75,6 +96,7 @@ export default function App() {
     setOriginRect(null)
     setRevealOrigin(null)
     window.scrollTo(0, 0)
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
     setPhase('shop')
   }, [])
 

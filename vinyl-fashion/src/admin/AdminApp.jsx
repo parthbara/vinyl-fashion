@@ -198,6 +198,9 @@ function Shell({ email }) {
           </button>
         ))}
         <div className="spacer" />
+        <a className="adm-nav-btn" href="/" target="_blank" rel="noopener noreferrer">
+          <span className="label">STOREFRONT ↗</span>
+        </a>
         <button className="adm-nav-btn" onClick={() => signOut()}>
           <span className="label">SIGN OUT</span>
         </button>
@@ -1832,6 +1835,7 @@ const SETTING_FIELDS = [
   ['brand', 'mark', 'MONOGRAM (2–3 letters)', 'VF'],
   ['brand', 'tagline', 'TAGLINE', 'WEAR THE SOUND'],
   ['brand', 'est', 'EST. LINE', 'EST. MMXXVI'],
+  ['brand', 'notice', 'ANNOUNCEMENT BAR (shows over the shop wall · empty = hidden)', 'FIRST PRESSING — ICEMAN CAPSULE OUT NOW'],
   ['contact', 'whatsapp', 'WHATSAPP (intl, no +)', '9779818981912'],
   ['contact', 'whatsappDisplay', 'WHATSAPP (display)', '+977 98-1898-1912'],
   ['contact', 'instagram', 'INSTAGRAM HANDLE (no @)', 'vinylfashion.np'],

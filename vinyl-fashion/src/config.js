@@ -6,6 +6,7 @@ export const BRAND = {
   mark: 'VF', // monogram used on record labels / small badges
   tagline: 'WEAR THE SOUND',
   est: 'EST. MMXXVI',
+  notice: '', // announcement bar over the shop wall — empty hides it
 }
 
 // ── Contact / order routing ─────────────────────────────────────

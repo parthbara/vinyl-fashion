@@ -129,6 +129,7 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
       <div className="slot-meta">
         <span className="slot-artist">{album.artist}</span>
         <span className="slot-title">{album.title}</span>
+        {!album.comingSoon && <span className="slot-live">● AVAILABLE NOW</span>}
       </div>
     </div>
   )

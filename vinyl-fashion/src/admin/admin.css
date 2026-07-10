@@ -582,6 +582,12 @@
   color: #d8a548;
 }
 
+/* nav link variant (STOREFRONT ↗) matches the tab buttons */
+a.adm-nav-btn {
+  display: block;
+  text-decoration: none;
+}
+
 /* one-click coming-soon flip on the album card head */
 .adm-soon-toggle {
   font-family: var(--font-mono, monospace);

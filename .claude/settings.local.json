@@ -11,7 +11,11 @@
       "Bash(git rm *)",
       "Bash(git push *)",
       "Bash(ls .claude)",
-      "Bash(cat \"C:\\\\Users\\\\user2\\\\Desktop\\\\vinyl fashion/.claude/launch.json\")"
+      "Bash(cat \"C:\\\\Users\\\\user2\\\\Desktop\\\\vinyl fashion/.claude/launch.json\")",
+      "Bash(perl -i -pe 's/\\\\.replace\\\\\\(\\\\/\\\\[\\\\x{0300}-\\\\x{036f}\\\\]\\\\/g, ''\\\\x27\\\\x27''\\\\\\)/.replace\\(\\\\/[\\\\\\\\u0300-\\\\\\\\u036f]\\\\/g, \\\\x27\\\\x27\\)/ if /normalize/../toLowerCase/' src/components/Shop.jsx)",
+      "Bash(grep -n \"replace\\(/\\\\[\" src/components/Shop.jsx)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)"
     ]
   }
 }

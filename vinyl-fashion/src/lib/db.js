@@ -42,7 +42,16 @@ function normalizeProduct(row) {
     // Existing DB stores option labels in product_variants.color. New rows
     // prefix labels as design:/color: so the storefront can split them.
     designs: [...new Set([...clean('design:'), ...legacyDesigns])],
-    colors: [...new Set(clean('color:'))],
+    // colour labels may encode "Name|#hex|imageIndex" (admin colour rows);
+    // legacy plain names parse to a swatch-less colour with no photo link
+    colors: [...new Set(clean('color:'))].map((raw) => {
+      const [name, hex, idx] = raw.split('|')
+      return {
+        name: (name || '').trim(),
+        hex: (hex || '').trim() || null,
+        imgIdx: idx !== undefined && idx !== '' ? Number(idx) : null,
+      }
+    }),
     sizes: [...new Set(variants.map((v) => v.size).filter(Boolean))],
     soldOut: row.status === 'soldout' || row.stock === 0,
   }
@@ -107,6 +116,7 @@ export async function fetchAlbums() {
       capsule: seedById[row.id]?.capsule ?? makePlaceholderCapsule(),
       comingSoon: !!effects.comingSoon,
       comingSoonText: effects.comingSoonText || 'COMING SOON',
+      capsuleTitle: effects.capsuleTitle || '',
     }
   })
 }

@@ -43,6 +43,9 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     [rawAlbums]
   )
   const [hoverId, setHoverId] = useState(null)
+  // wall filter — with a 90-record crate, shoppers need the short way
+  // to what's actually buyable (search still covers everything)
+  const [wallFilter, setWallFilter] = useState('all') // all | live | soon
   const [soonPeek, setSoonPeek] = useState(null)
   const [results, setResults] = useState(null) // query string for the results page
   const [artistView, setArtistView] = useState(null) // artist name for the artist page
@@ -64,11 +67,21 @@ export default function Shop({ onOpen, dimmed, openingId }) {
   }, [])
 
   // balance the shelves: 6 albums at 5-wide → 3+3, not 5+1; 20 → 5×4
+  const wallAlbums = useMemo(
+    () =>
+      wallFilter === 'live'
+        ? albums.filter((a) => !a.comingSoon)
+        : wallFilter === 'soon'
+          ? albums.filter((a) => a.comingSoon)
+          : albums,
+    [albums, wallFilter]
+  )
+
   const rows = useMemo(() => {
-    if (!cols) return [albums]
-    const rowCount = Math.ceil(albums.length / cols)
-    return chunk(albums, Math.ceil(albums.length / rowCount))
-  }, [cols, albums])
+    if (!cols) return [wallAlbums]
+    const rowCount = Math.ceil(wallAlbums.length / cols)
+    return chunk(wallAlbums, Math.ceil(wallAlbums.length / rowCount))
+  }, [cols, wallAlbums])
 
   // a big crate (bulk-imported Coming-Soon wall) must not eagerly warm
   // dozens of covers — only pre-warm the first shelf; the rest lazy-load
@@ -218,7 +231,25 @@ export default function Shop({ onOpen, dimmed, openingId }) {
       </header>
 
       <div className="shop-stage">
-        <p className="stage-kicker">SIDE A · {albums.length} PRESSINGS</p>
+        <p className="stage-kicker">SIDE A · {wallAlbums.length} PRESSINGS</p>
+        <div className="crate-filters" role="group" aria-label="Filter the wall">
+          {[
+            ['all', `ALL · ${albums.length}`],
+            ['live', `AVAILABLE · ${albums.filter((a) => !a.comingSoon).length}`],
+            ['soon', `COMING SOON · ${albums.filter((a) => a.comingSoon).length}`],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={`crate-filter ${wallFilter === key ? 'on' : ''}`}
+              onClick={() => {
+                sfx.tick()
+                setWallFilter(key)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="shelf-wall">
           {rows.map((row, r) => (
             <div className="shelf" key={r}>

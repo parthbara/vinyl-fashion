@@ -1443,7 +1443,19 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
       <div className="adm-album-head">
         {edit.artwork ? <img src={edit.artwork.replace('1200x1200bb', '420x420bb')} alt="" /> : <span style={{ width: 40 }} />}
         <span className="t"><b>{a.title}</b><span>{a.artist} · {a.year}</span></span>
-        {a.effects?.comingSoon && <span className="pill draft">soon</span>}
+        <button
+          type="button"
+          className={`adm-soon-toggle ${a.effects?.comingSoon ? 'soon' : 'open'}`}
+          title={a.effects?.comingSoon ? 'Coming soon — click to make shoppable' : 'Shoppable — click to flip to coming soon'}
+          onClick={(e) => {
+            e.stopPropagation()
+            updateAlbumRow(a.id, { effects: { ...a.effects, comingSoon: !a.effects?.comingSoon } })
+              .then(onSaved)
+              .catch((err) => alert(err.message))
+          }}
+        >
+          {a.effects?.comingSoon ? '◷ SOON' : '● OPEN'}
+        </button>
         <span className={`pill ${a.status === 'live' ? 'live' : 'draft'}`}>{a.status}</span>
       </div>
       {open && (

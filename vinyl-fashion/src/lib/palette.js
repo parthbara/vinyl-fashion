@@ -122,17 +122,26 @@ export async function coverPalette(album) {
   return p
 }
 
-// Returns a cover-derived palette (or null until it resolves); callers
-// fall back to the album's stored palette meanwhile.
+// Returns { palette, ready }. `ready` is false until extraction settles,
+// so callers can hold a neutral base instead of flashing the stored
+// default palette and then morphing.
 export function useCoverPalette(album) {
-  const [p, setP] = useState(() => PMEM.get(album?.id) ?? null)
+  const id = album?.id
+  const [state, setState] = useState(() =>
+    PMEM.has(id) ? { palette: PMEM.get(id), ready: true } : { palette: null, ready: false }
+  )
   useEffect(() => {
     let live = true
-    coverPalette(album).then((res) => live && res && setP(res))
+    if (PMEM.has(id)) {
+      setState({ palette: PMEM.get(id), ready: true })
+      return
+    }
+    setState({ palette: null, ready: false })
+    coverPalette(album).then((res) => live && setState({ palette: res, ready: true }))
     return () => {
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [album?.id])
-  return p
+  }, [id])
+  return state
 }

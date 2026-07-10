@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { BRAND, waLink } from '../config'
 import { useProducts } from '../lib/useProducts'
 import GarmentSvg from './GarmentSvg'
@@ -90,7 +91,7 @@ export default function CapsuleGrid({ album, featuredName }) {
           THE CAPSULE
         </p>
         <h3 className="capsule-title" data-reveal>
-          {(featuredName || album.featured).toUpperCase()} COLLECTION
+          {(album.capsuleTitle || album.title).toUpperCase()} COLLECTION
         </h3>
         <p className="capsule-note" data-reveal>
           {live
@@ -149,7 +150,9 @@ function QuickView({ album, item, live, onClose }) {
       ? `Hi ${BRAND.name}! Is the ${item.name} (${album.title} capsule) getting a restock?`
       : `Hi ${BRAND.name}! Put me on the list for the ${item.name} from the ${album.title} capsule.`
 
-  return (
+  // portal to <body>: inside the page, sibling sections (footer) stack
+  // above the capsule section and paint over the modal
+  return createPortal(
     <div className="qv-overlay" onClick={onClose} role="dialog" aria-label={item.name}>
       <div className="qv-card" onClick={(e) => e.stopPropagation()}>
         <button className="qv-x" aria-label="Close" data-cursor="back" onClick={onClose}>
@@ -239,16 +242,19 @@ function QuickView({ album, item, live, onClose }) {
               <div className="qv-sizes" role="group" aria-label="Colour">
                 {colors.map((c, ci) => (
                   <button
-                    key={c}
-                    className={`qv-size wide ${color === c ? 'on' : ''}`}
+                    key={c.name}
+                    className={`qv-size wide ${color === c.name ? 'on' : ''}`}
                     onClick={() => {
                       sfx.tick()
-                      const on = color === c
-                      setColor(on ? null : c)
-                      if (!on) jump(designs.length + ci)
+                      const on = color === c.name
+                      setColor(on ? null : c.name)
+                      // a colour with its own photo jumps straight to it;
+                      // legacy colours fall back to the old order guess
+                      if (!on) jump(c.imgIdx ?? designs.length + ci)
                     }}
                   >
-                    {c}
+                    {c.hex && <i className="qv-swatch" style={{ background: c.hex }} aria-hidden="true" />}
+                    {c.name}
                   </button>
                 ))}
               </div>
@@ -288,6 +294,7 @@ function QuickView({ album, item, live, onClose }) {
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

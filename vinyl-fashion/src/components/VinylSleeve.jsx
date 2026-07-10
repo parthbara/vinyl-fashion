@@ -4,6 +4,7 @@ import CoverImage from './CoverImage'
 import VinylDisc from './VinylDisc'
 import * as sfx from '../lib/sfx'
 import { warmAlbumArt } from '../lib/preload'
+import { coverPalette } from '../lib/palette'
 import { hasFinePointer, prefersReducedMotion } from '../lib/env'
 
 // One record in the crate: a CSS-3D jacket with the disc tucked
@@ -54,6 +55,7 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
   const onEnter = () => {
     onHover(album.id)
     warmAlbumArt(album, 'mid') // cinematic + hero paint from cache
+    if (album.comingSoon) coverPalette(album).catch(() => {}) // teaser colours ready by click
     sfx.tick()
     if (prefersReducedMotion()) return
     // gentle in a dense wall — a small lift + the record easing up

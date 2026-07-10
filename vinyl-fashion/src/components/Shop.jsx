@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { BRAND, waLink } from '../config'
 import { useAlbums } from '../lib/useAlbums'
 import { useArtistImage } from '../lib/artistImage'
 import { useCoverPalette } from '../lib/palette'
+
 import { warmAlbumArt } from '../lib/preload'
 import baked from '../data/tracks.json'
 import VinylSleeve from './VinylSleeve'
@@ -10,6 +12,17 @@ import CoverImage from './CoverImage'
 import DustCanvas from './DustCanvas'
 import Ticker from './Ticker'
 import * as sfx from '../lib/sfx'
+
+// One canonical form for artist/title matching: lowercase, diacritics
+// stripped, punctuation collapsed — so "DRAKE"/"Drake", "KISS"/"Kiss",
+// "Beyoncé"/"Beyonce" and "AC/DC"/"ac dc" all file together.
+const nameKey = (s) =>
+  String(s || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 
 const chunk = (arr, n) => {
   const out = []
@@ -71,9 +84,9 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     () =>
       albums.map((a) => ({
         a,
-        hay: `${a.artist} ${a.title}`.toLowerCase(),
-        artistLc: a.artist.toLowerCase(),
-        titleLc: a.title.toLowerCase(),
+        hay: `${nameKey(a.artist)} ${nameKey(a.title)}`,
+        artistKey: nameKey(a.artist),
+        titleKey: nameKey(a.title),
         tracks: (baked[String(a.collectionId)]?.tracks || []).map((t) => t.name),
       })),
     [albums]
@@ -82,7 +95,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
   // compact list for the type-ahead dropdown (max 6)
   const quickSearch = useMemo(
     () => (q) => {
-      const ql = q.trim().toLowerCase()
+      const ql = nameKey(q)
       if (ql.length < 2) return []
       const out = []
       for (const e of searchIndex) {
@@ -101,16 +114,16 @@ export default function Shop({ onOpen, dimmed, openingId }) {
   // page you land on when you press Enter — Spotify-style.
   const fullSearch = useMemo(
     () => (q) => {
-      const ql = q.trim().toLowerCase()
+      const ql = nameKey(q)
       if (ql.length < 1) return { albums: [], artists: [], songs: [] }
       const albumHits = []
       const songHits = []
       const artistMap = new Map()
       for (const e of searchIndex) {
-        const artistMatch = e.artistLc.includes(ql)
-        if (e.titleLc.includes(ql) || artistMatch) albumHits.push(e.a)
-        if (artistMatch && !artistMap.has(e.artistLc)) {
-          artistMap.set(e.artistLc, { artist: e.a.artist, album: e.a })
+        const artistMatch = e.artistKey.includes(ql)
+        if (e.titleKey.includes(ql) || artistMatch) albumHits.push(e.a)
+        if (artistMatch && !artistMap.has(e.artistKey)) {
+          artistMap.set(e.artistKey, { artist: e.a.artist, album: e.a })
         }
         for (const t of e.tracks) {
           if (t.toLowerCase().includes(ql)) songHits.push({ album: e.a, song: t })
@@ -149,10 +162,13 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     openFromSearch(album)
   }
 
-  const artistAlbums = useMemo(
-    () => (artistView ? albums.filter((a) => a.artist === artistView) : []),
-    [artistView, albums]
-  )
+  // normalized match: seeds ("DRAKE"), iTunes imports ("Drake"), accents
+  // and punctuation variants all file under the same artist page
+  const artistAlbums = useMemo(() => {
+    if (!artistView) return []
+    const key = nameKey(artistView)
+    return albums.filter((a) => nameKey(a.artist) === key)
+  }, [artistView, albums])
 
   const openFromSearch = (album) => {
     if (album.comingSoon) {
@@ -279,7 +295,7 @@ function ArtistView({ artist, albums, onPick, onClose }) {
   const { url, ready } = useArtistImage(artist)
   const hero = url || (ready ? albums[0]?.artwork.replace('1200x1200bb', '600x600bb') : null)
 
-  return (
+  return createPortal(
     <div className="sr-overlay" role="dialog" aria-label={`${artist} — albums`}>
       <div
         className="artist-hero"
@@ -319,7 +335,8 @@ function ArtistView({ artist, albums, onPick, onClose }) {
           </div>
         </section>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -350,7 +367,7 @@ function SearchResults({ query, data, onPick, onArtist, onClose }) {
   const empty = !albums.length && !artists.length && !songs.length
   const top = albums[0] || artists[0]?.album || songs[0]?.album
 
-  return (
+  return createPortal(
     <div className="sr-overlay" role="dialog" aria-label={`Search results for ${query}`}>
       <div className="sr-head">
         <div className="sr-head-text">
@@ -437,7 +454,8 @@ function SearchResults({ query, data, onPick, onArtist, onClose }) {
           )}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -450,11 +468,13 @@ function ComingSoonPeek({ album, onClose }) {
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
 
-  // morph the teaser to the record's own cover colours (falls back to
-  // the album's stored palette until the cover-derived one resolves)
-  const extracted = useCoverPalette(album)
-  const p = extracted || album.palette
-  return (
+  // morph the teaser to the record's own cover colours; until extraction
+  // settles, sit on a neutral dark base (never the stored default — that
+  // caused a red flash on imported records)
+  const { palette: extracted, ready } = useCoverPalette(album)
+  const NEUTRAL = { bg0: '#0a0807', bg1: '#211c18', ink: '#f6f1ea', accent: '#d8a548' }
+  const p = extracted || (ready ? album.palette : NEUTRAL)
+  return createPortal(
     <div className="qv-overlay" onClick={onClose} role="dialog" aria-label={`${album.title} — coming soon`}>
       <div
         className="soon-peek"
@@ -487,7 +507,8 @@ function ComingSoonPeek({ album, onClose }) {
           <p className="soon-peek-note">FIRST PRESSINGS ARE LIMITED · WHATSAPP GETS FIRST DIBS</p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

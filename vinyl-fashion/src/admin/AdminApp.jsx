@@ -457,9 +457,18 @@ const SIZE_PRESETS = {
   numeric: ['28', '30', '32', '34', '36', '38', '40'],
 }
 const COLOR_PRESETS = {
-  base: ['Black', 'White', 'Navy', 'Charcoal', 'Gray'],
-  vibrant: ['Red', 'Royal Blue', 'Forest Green', 'Crimson', 'Burgundy'],
-  earth: ['Tan', 'Cream', 'Olive', 'Rust', 'Khaki'],
+  base: [
+    { name: 'Black', hex: '#141414' }, { name: 'White', hex: '#f2f0ea' }, { name: 'Navy', hex: '#1d2a44' },
+    { name: 'Charcoal', hex: '#3a3a3a' }, { name: 'Gray', hex: '#8d8d8d' },
+  ],
+  vibrant: [
+    { name: 'Red', hex: '#c22d2d' }, { name: 'Royal Blue', hex: '#2d50c2' }, { name: 'Forest Green', hex: '#1f5e38' },
+    { name: 'Crimson', hex: '#8f1030' }, { name: 'Burgundy', hex: '#5e1a26' },
+  ],
+  earth: [
+    { name: 'Tan', hex: '#c9a476' }, { name: 'Cream', hex: '#efe6d2' }, { name: 'Olive', hex: '#6b6b3a' },
+    { name: 'Rust', hex: '#a4502a' }, { name: 'Khaki', hex: '#9a8b62' },
+  ],
 }
 
 function AddStock() {
@@ -472,7 +481,7 @@ function AddStock() {
   const [selectedSlot, setSelectedSlot] = useState(0)
   const fileRef = useRef(null)
   const [sizeInput, setSizeInput] = useState('')
-  const [colorInput, setColorInput] = useState('')
+  const [colorRows, setColorRows] = useState([])
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   // sizes/colors are freeform and kept as ordered, de-duped chip lists
@@ -490,24 +499,12 @@ function AddStock() {
   }
   const removeSize = (val) => setF((s) => ({ ...s, sizes: s.sizes.filter((x) => x !== val) }))
 
-  const addColors = (raw) => {
-    const parts = (Array.isArray(raw) ? raw : String(raw).split(','))
-      .map((v) => v.trim())
-      .filter(Boolean)
-    if (!parts.length) return
-    setF((s) => {
-      const next = [...(s.colors ? s.colors.split(',').map(c => c.trim()) : [])]
-      for (const p of parts) if (!next.some((x) => x.toLowerCase() === p.toLowerCase())) next.push(p)
-      return { ...s, colors: next.join(', ') }
-    })
-    setColorInput('')
-  }
-  const removeColor = (val) => {
-    setF((s) => {
-      const colors = (s.colors ? s.colors.split(',').map(c => c.trim()) : []).filter(x => x !== val)
-      return { ...s, colors: colors.join(', ') }
-    })
-  }
+  // colour variants: swatch + name + an optional photo of the garment in
+  // that colour — the storefront swatch and photo-jump come from these
+  const setColorRow = (i, patch) => setColorRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const removeColorRow = (i) => setColorRows((rs) => rs.filter((_, j) => j !== i))
+  const addColorRows = (list) =>
+    setColorRows((rs) => [...rs, ...list.filter((c) => !rs.some((r) => r.name.toLowerCase() === c.name.toLowerCase())).map((c) => ({ file: null, ...c }))])
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
@@ -532,6 +529,12 @@ function AddStock() {
     setBusy(true)
     setMsg(null)
     try {
+      // colour labels encode swatch + which uploaded photo is theirs:
+      // "Name|#hex|imageIndex" — colour photos ride after the main set
+      const cRows = colorRows.filter((r) => r.name.trim())
+      let nextIdx = files.length
+      const colorLabels = cRows.map((r) => `${r.name.trim()}|${r.hex || ''}|${r.file ? nextIdx++ : ''}`)
+      const allFiles = [...files, ...cRows.filter((r) => r.file).map((r) => r.file)]
       await addProduct(
         {
           title: f.title.trim(),
@@ -545,14 +548,15 @@ function AddStock() {
           ai_info: f.ai_info || null,
           caption: f.caption || null,
         },
-        files,
+        allFiles,
         f.variants.split(','),
-        f.colors.split(','),
+        colorLabels,
         f.sizes
       )
       setMsg({ ok: true, text: `“${f.title}” added to the ${f.album_id} capsule.` })
       setF({ ...EMPTY, album_id: f.album_id })
       setFiles([])
+      setColorRows([])
       if (fileRef.current) fileRef.current.value = ''
     } catch (ex) {
       setMsg({ ok: false, text: ex.message })
@@ -621,39 +625,35 @@ function AddStock() {
         <input value={f.variants} onChange={set('variants')} placeholder="Leave empty for a single design" />
       </div>
       <div className="adm-field full">
-        <label>COLOURS (letters or names — leave empty for one colour)</label>
-        {f.colors && (
-          <div className="adm-chips">
-            {f.colors.split(',').map((c) => {
-              const col = c.trim()
-              return col ? (
-                <span className="adm-chip" key={col}>
-                  {col}
-                  <button type="button" aria-label={`Remove ${col}`} onClick={() => removeColor(col)}>×</button>
-                </span>
-              ) : null
-            })}
+        <label>COLOUR VARIANTS (swatch + name + that colour's photo — shoppers see the swatch and the photo swaps on select)</label>
+        {colorRows.map((r, i) => (
+          <div className="adm-color-row" key={i}>
+            <input
+              type="color"
+              className="adm-color-swatch"
+              value={r.hex || '#888888'}
+              onChange={(e) => setColorRow(i, { hex: e.target.value })}
+              title="Pick the swatch"
+            />
+            <input
+              className="adm-color-name"
+              value={r.name}
+              onChange={(e) => setColorRow(i, { name: e.target.value })}
+              placeholder="Colour name (e.g. Sea Green)"
+            />
+            <label className="adm-color-photo" title="Photo of the garment in this colour">
+              <input type="file" accept="image/*" hidden onChange={(e) => setColorRow(i, { file: e.target.files[0] || null })} />
+              {r.file ? <img src={URL.createObjectURL(r.file)} alt="" /> : <span>＋ PHOTO</span>}
+            </label>
+            <button type="button" className="adm-chip-btn" onClick={() => removeColorRow(i)}>× REMOVE</button>
           </div>
-        )}
-        <div className="adm-chip-add">
-          <input
-            value={colorInput}
-            onChange={(e) => setColorInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addColors(colorInput)
-              }
-            }}
-            placeholder="Add a colour (e.g. Black, Navy, Cream)"
-          />
-          <button type="button" className="adm-chip-btn" onClick={() => addColors(colorInput)}>＋ Add colour</button>
-        </div>
+        ))}
         <div className="adm-chip-presets">
           <span>Quick add:</span>
-          <button type="button" onClick={() => addColors(COLOR_PRESETS.base)}>Base · Black, White, Navy, etc</button>
-          <button type="button" onClick={() => addColors(COLOR_PRESETS.vibrant)}>Vibrant · Red, Blue, Green, etc</button>
-          <button type="button" onClick={() => addColors(COLOR_PRESETS.earth)}>Earth · Tan, Cream, Olive, etc</button>
+          <button type="button" onClick={() => addColorRows([{ name: '', hex: '#888888' }])}>＋ ADD COLOUR</button>
+          <button type="button" onClick={() => addColorRows(COLOR_PRESETS.base)}>Base 5</button>
+          <button type="button" onClick={() => addColorRows(COLOR_PRESETS.vibrant)}>Vibrant 5</button>
+          <button type="button" onClick={() => addColorRows(COLOR_PRESETS.earth)}>Earth 5</button>
         </div>
       </div>
       <div className="adm-field full">
@@ -690,8 +690,9 @@ function AddStock() {
         </div>
       </div>
       <p className="adm-note full" style={{ marginTop: -4 }}>
-        Photo order = <b>design images first, then colour images</b>. Selecting a design or colour on the
-        storefront jumps to its matching photo; shoppers can still swipe the whole carousel.
+        The PHOTOS field below is the main carousel — <b>first = cover, then one per design in order</b>.
+        Each colour&apos;s own photo (from its row above) is appended automatically and the storefront
+        jumps to it when that swatch is selected.
       </p>
       <div className="adm-field full"><label>AI EXTRA INFO (hidden from shoppers — feeds the assistant)</label><textarea value={f.ai_info} onChange={set('ai_info')} placeholder="e.g. can be customized with 2 weeks notice; hand wash only." /></div>
       <div className="adm-field full">
@@ -1179,6 +1180,7 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
     palette: { ...(a.palette || {}) }, fonts: { ...(a.fonts || {}) },
     ticker: [...(a.ticker || [])], notes: (a.notes || []).map((n) => ({ ...n })), artwork: a.artwork || '',
     comingSoon: !!a.effects?.comingSoon, comingSoonText: a.effects?.comingSoonText || 'COMING SOON',
+    capsuleTitle: a.effects?.capsuleTitle || '',
     clipStart: a.clip?.start ?? '', clipEnd: a.clip?.duration ? (a.clip?.start ?? 0) + a.clip.duration : '', clipDur: a.clip?.duration ?? '', clipSrc: a.clip?.src || '',
   })
   const [f, setF] = useState(null)
@@ -1196,7 +1198,7 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
         featured: edit.featured, story: edit.story, status: edit.status, sort: Number(edit.sort) || 0,
         palette: edit.palette, fonts: edit.fonts, ticker: edit.ticker.filter(Boolean),
         notes: edit.notes.filter((n) => n.text), artwork: edit.artwork || null,
-        effects: { ...a.effects, comingSoon: edit.comingSoon, comingSoonText: edit.comingSoonText },
+        effects: { ...a.effects, comingSoon: edit.comingSoon, comingSoonText: edit.comingSoonText, capsuleTitle: edit.capsuleTitle.trim() },
         clip: edit.clipStart !== '' || edit.clipEnd !== '' || edit.clipSrc
           ? { start: Number(edit.clipStart) || 0, ...(edit.clipEnd !== '' ? { duration: Math.max(0.5, Number(edit.clipEnd) - (Number(edit.clipStart) || 0)) } : {}), ...(edit.clipSrc ? { src: edit.clipSrc } : {}) }
           : {},
@@ -1245,6 +1247,9 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
           <div className="adm-field"><label>TITLE</label><input value={edit.title} onChange={(e) => set('title', e.target.value)} /></div>
           <div className="adm-field full"><label>DISPLAY TITLE (use ↵ for line breaks)</label>
             <textarea style={{ minHeight: 54 }} value={edit.display_title} onChange={(e) => set('display_title', e.target.value)} />
+          </div>
+          <div className="adm-field full"><label>CAPSULE HEADING (the big "… COLLECTION" line on the album page — empty = album title)</label>
+            <input value={edit.capsuleTitle} onChange={(e) => set('capsuleTitle', e.target.value)} placeholder={`e.g. ${(edit.title || 'FROZEN').toUpperCase()}`} />
           </div>
           <div className="adm-field"><label>YEAR</label><input value={edit.year} onChange={(e) => set('year', e.target.value)} /></div>
           <div className="adm-field"><label>LABEL</label><input value={edit.label} onChange={(e) => set('label', e.target.value)} /></div>

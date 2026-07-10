@@ -504,7 +504,13 @@ function AddStock() {
   const setColorRow = (i, patch) => setColorRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   const removeColorRow = (i) => setColorRows((rs) => rs.filter((_, j) => j !== i))
   const addColorRows = (list) =>
-    setColorRows((rs) => [...rs, ...list.filter((c) => !rs.some((r) => r.name.toLowerCase() === c.name.toLowerCase())).map((c) => ({ file: null, ...c }))])
+    setColorRows((rs) => [
+      ...rs,
+      // only dedupe real names — blank rows (＋ ADD COLOUR) always add
+      ...list
+        .filter((c) => !c.name.trim() || !rs.some((r) => r.name.trim().toLowerCase() === c.name.trim().toLowerCase()))
+        .map((c) => ({ file: null, ...c })),
+    ])
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
@@ -639,6 +645,7 @@ function AddStock() {
               className="adm-color-name"
               value={r.name}
               onChange={(e) => setColorRow(i, { name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
               placeholder="Colour name (e.g. Sea Green)"
             />
             <label className="adm-color-photo" title="Photo of the garment in this colour">

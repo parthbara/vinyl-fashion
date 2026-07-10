@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ALBUMS, makePlaceholderCapsule } from '../data/albums'
 import { CURATED_ALBUMS } from '../data/curatedAlbums'
 import baked from '../data/tracks.json'
+import ColorPicker from './ColorPicker'
 import { ensureFont } from '../lib/fonts'
 import { BRAND, CONTACT } from '../config'
 import {
@@ -482,6 +483,7 @@ function AddStock() {
   const fileRef = useRef(null)
   const [sizeInput, setSizeInput] = useState('')
   const [colorRows, setColorRows] = useState([])
+  const [openPicker, setOpenPicker] = useState(null) // index of the open colour wheel
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   // sizes/colors are freeform and kept as ordered, de-duped chip lists
@@ -631,33 +633,47 @@ function AddStock() {
         <input value={f.variants} onChange={set('variants')} placeholder="Leave empty for a single design" />
       </div>
       <div className="adm-field full">
-        <label>COLOUR VARIANTS (swatch + name + that colour's photo — shoppers see the swatch and the photo swaps on select)</label>
+        <label>COLOUR VARIANTS — pick a colour from the wheel, name it, add its photo</label>
         {colorRows.map((r, i) => (
-          <div className="adm-color-row" key={i}>
-            <input
-              type="color"
-              className="adm-color-swatch"
-              value={r.hex || '#888888'}
-              onChange={(e) => setColorRow(i, { hex: e.target.value })}
-              title="Pick the swatch"
-            />
-            <input
-              className="adm-color-name"
-              value={r.name}
-              onChange={(e) => setColorRow(i, { name: e.target.value })}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-              placeholder="Colour name (e.g. Sea Green)"
-            />
-            <label className="adm-color-photo" title="Photo of the garment in this colour">
-              <input type="file" accept="image/*" hidden onChange={(e) => setColorRow(i, { file: e.target.files[0] || null })} />
-              {r.file ? <img src={URL.createObjectURL(r.file)} alt="" /> : <span>＋ PHOTO</span>}
-            </label>
-            <button type="button" className="adm-chip-btn" onClick={() => removeColorRow(i)}>× REMOVE</button>
+          <div className="adm-color-card" key={i}>
+            <div className="adm-color-top">
+              <button
+                type="button"
+                className="adm-color-swatch"
+                style={{ background: r.hex || '#888888' }}
+                onClick={() => setOpenPicker(openPicker === i ? null : i)}
+                title="Open the colour wheel"
+                aria-label="Open the colour wheel"
+              />
+              <input
+                className="adm-color-name"
+                value={r.name}
+                onChange={(e) => setColorRow(i, { name: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                placeholder="Colour name (e.g. Sea Green)"
+              />
+              <button type="button" className="adm-chip-btn danger" onClick={() => { removeColorRow(i); setOpenPicker(null) }}>× Remove</button>
+            </div>
+            {openPicker === i && (
+              <ColorPicker value={r.hex || '#888888'} onChange={(hex) => setColorRow(i, { hex })} />
+            )}
+            <div className="adm-color-photos">
+              {r.file && (
+                <span className="adm-color-thumb">
+                  <img src={URL.createObjectURL(r.file)} alt="" />
+                  <button type="button" onClick={() => setColorRow(i, { file: null })} aria-label="Remove photo">×</button>
+                </span>
+              )}
+              <label className="adm-color-add" title="Photo of the garment in this colour">
+                <input type="file" accept="image/*" hidden onChange={(e) => setColorRow(i, { file: e.target.files[0] || null })} />
+                <span>{r.file ? '↻ Replace photo' : '＋ Add photo'}</span>
+              </label>
+            </div>
           </div>
         ))}
         <div className="adm-chip-presets">
-          <span>Quick add:</span>
-          <button type="button" onClick={() => addColorRows([{ name: '', hex: '#888888' }])}>＋ ADD COLOUR</button>
+          <button type="button" className="adm-chip-btn accent" onClick={() => { addColorRows([{ name: '', hex: '#888888' }]); setOpenPicker(colorRows.length) }}>＋ Add colour</button>
+          <span>or quick add:</span>
           <button type="button" onClick={() => addColorRows(COLOR_PRESETS.base)}>Base 5</button>
           <button type="button" onClick={() => addColorRows(COLOR_PRESETS.vibrant)}>Vibrant 5</button>
           <button type="button" onClick={() => addColorRows(COLOR_PRESETS.earth)}>Earth 5</button>

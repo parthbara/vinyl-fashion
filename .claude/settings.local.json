@@ -15,7 +15,8 @@
       "Bash(perl -i -pe 's/\\\\.replace\\\\\\(\\\\/\\\\[\\\\x{0300}-\\\\x{036f}\\\\]\\\\/g, ''\\\\x27\\\\x27''\\\\\\)/.replace\\(\\\\/[\\\\\\\\u0300-\\\\\\\\u036f]\\\\/g, \\\\x27\\\\x27\\)/ if /normalize/../toLowerCase/' src/components/Shop.jsx)",
       "Bash(grep -n \"replace\\(/\\\\[\" src/components/Shop.jsx)",
       "Bash(node -e ' *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git commit -m 'Per-color photos & swatches, portal overlays, artist match fix, capsule heading control *)"
     ]
   }
 }

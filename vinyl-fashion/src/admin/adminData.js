@@ -86,7 +86,7 @@ export async function fetchAllProducts() {
   const s = await sb()
   const { data, error } = await s
     .from('products')
-    .select('*, product_variants(id,color,stock)')
+    .select('*, product_variants(id,color,size,stock)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data
@@ -153,15 +153,9 @@ const variantRow = (product_id, prefix, label, stock) => ({
   stock,
 })
 
-// Sizes live in their own column (product_variants.size); the storefront
-// reads them straight off and shows a size picker.
-const sizeRow = (product_id, label, stock) => ({
-  product_id,
-  size: label.trim(),
-  stock,
-})
-
-export async function addProduct(fields, files, designs = [], colors = [], sizes = []) {
+// `combos` (preferred): [{ color: 'color:Name|#hex|imgIdx'|null, size|null, stock }]
+// — one row per colour×size combo, each with its own stock count.
+export async function addProduct(fields, files, designs = [], combos = null) {
   const s = await sb()
   const images = files?.length ? await uploadProductImages(files) : []
   const { data, error } = await s
@@ -172,11 +166,41 @@ export async function addProduct(fields, files, designs = [], colors = [], sizes
   if (error) throw error
   const rows = [
     ...designs.map((v) => v.trim()).filter(Boolean).map((d) => variantRow(data.id, 'design', d, fields.stock ?? 0)),
-    ...colors.map((v) => v.trim()).filter(Boolean).map((c) => variantRow(data.id, 'color', c, fields.stock ?? 0)),
-    ...sizes.map((v) => v.trim()).filter(Boolean).map((sz) => sizeRow(data.id, sz, fields.stock ?? 0)),
+    ...(combos || []).map((c) => ({ product_id: data.id, color: c.color, size: c.size, stock: c.stock ?? 0 })),
   ]
   if (rows.length) {
     const { error: ve } = await s.from('product_variants').insert(rows)
+    if (ve) throw ve
+  }
+}
+
+export async function updateVariant(id, patch) {
+  const s = await sb()
+  const { error } = await s.from('product_variants').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+// One-click restock/copy: same fields + photos + variants, lands hidden
+// so it never flashes onto the storefront before it's reviewed.
+export async function duplicateProduct(p) {
+  const s = await sb()
+  const { data, error } = await s
+    .from('products')
+    .insert({
+      title: `${p.title} (COPY)`,
+      album_id: p.album_id, garment_type: p.garment_type, category: p.category,
+      price: p.price, sale_price: p.sale_price, stock: p.stock,
+      description: p.description, ai_info: p.ai_info, caption: p.caption,
+      images: p.images || [], status: 'hidden',
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+  const vars = (p.product_variants || []).map((v) => ({
+    product_id: data.id, color: v.color ?? null, size: v.size ?? null, stock: v.stock ?? 0,
+  }))
+  if (vars.length) {
+    const { error: ve } = await s.from('product_variants').insert(vars)
     if (ve) throw ve
   }
 }

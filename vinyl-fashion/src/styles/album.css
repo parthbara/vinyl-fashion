@@ -669,6 +669,50 @@
   to { opacity: 1; transform: none; }
 }
 
+/* scarcity line under the price — conversion nudge, album-accented */
+.qv-left {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+/* shake the picker row the shopper skipped */
+@keyframes qv-nudge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .qv-sizes.nudge {
+    animation: qv-nudge 0.45s ease;
+  }
+}
+
+/* order button while a pick is missing — present but clearly waiting */
+.qv-order.gated {
+  opacity: 0.62;
+  filter: saturate(0.7);
+}
+
+/* a colour/size combo the stock grid says is gone */
+.qv-size.out {
+  opacity: 0.38;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.qv-out-tag {
+  display: inline-block; /* atomic box — escapes the strike-through */
+  margin-left: 8px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+
 /* colour swatch dot inside a colour-variant chip */
 .qv-swatch {
   display: inline-block;
@@ -1081,6 +1125,15 @@ a.foot-line:hover {
   font-size: 11px;
   line-height: 1;
   opacity: 0.75;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.dock-vol-ico:hover {
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 .dock-vol-slider {

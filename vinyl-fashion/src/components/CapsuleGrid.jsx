@@ -106,18 +106,34 @@ export default function CapsuleGrid({ album, featuredName }) {
 }
 
 // ── quick-view ───────────────────────────────────────────────────
-const DEFAULT_SIZES = ['S', 'M', 'L', 'XL']
-
 function QuickView({ album, item, live, onClose }) {
   const [size, setSize] = useState(null)
   const [design, setDesign] = useState(null)
   const [color, setColor] = useState(null)
   const [idx, setIdx] = useState(0)
+  const [nudge, setNudge] = useState(null) // 'size' | 'color' — shake the row they skipped
 
   const purchasable = live && item.price && !item.soldOut
   const designs = item.designs || []
   const colors = item.colors || []
-  const sizes = item.sizes?.length ? item.sizes : DEFAULT_SIZES
+  // only REAL sizes — never invent S/M/L that don't exist in stock
+  const sizes = item.sizes || []
+
+  // ── per-combo availability (colour × size stock grid) ──────────
+  // sparse map — combos the admin never counted stay available
+  const sm = item.stockMap || {}
+  const colorOut = (cName) => {
+    const keys = Object.keys(sm).filter((k) => k.startsWith(cName + '¦'))
+    return keys.length > 0 && keys.every((k) => sm[k] <= 0)
+  }
+  const sizeOut = (sz, cName) => {
+    if (cName) {
+      const v = sm[`${cName}¦${sz}`]
+      if (v != null) return v <= 0
+    }
+    const keys = Object.keys(sm).filter((k) => k.endsWith('¦' + sz))
+    return keys.length > 0 && keys.every((k) => sm[k] <= 0)
+  }
   const images = useMemo(() => (item.images?.length ? item.images : item.image ? [item.image] : []), [item])
 
   useEffect(() => {
@@ -149,6 +165,30 @@ function QuickView({ album, item, live, onClose }) {
     : item.soldOut
       ? `Hi ${BRAND.name}! Is the ${item.name} (${album.title} capsule) getting a restock?`
       : `Hi ${BRAND.name}! Put me on the list for the ${item.name} from the ${album.title} capsule.`
+
+  // a real order names its colour and size — hold the button until then
+  const needColor = purchasable && colors.length > 0 && !color
+  const needSize = purchasable && sizes.length > 0 && !size
+  const gateOrder = (e) => {
+    if (!purchasable || (!needColor && !needSize)) return
+    e.preventDefault()
+    sfx.pop()
+    const what = needColor ? 'color' : 'size'
+    setNudge(what)
+    setTimeout(() => setNudge(null), 650)
+  }
+
+  // stock for the current selection: exact combo → colour/size row → item
+  const remaining = (() => {
+    if (!purchasable) return null
+    const tries = [
+      color || size ? `${color || ''}¦${size || ''}` : null,
+      color ? `${color}¦` : null,
+      size ? `¦${size}` : null,
+    ].filter(Boolean)
+    for (const k of tries) if (sm[k] != null) return sm[k]
+    return item.stock ?? null
+  })()
 
   // portal to <body>: inside the page, sibling sections (footer) stack
   // above the capsule section and paint over the modal
@@ -212,6 +252,9 @@ function QuickView({ album, item, live, onClose }) {
               'IN DEVELOPMENT · DROP DATE TBA'
             )}
           </p>
+          {purchasable && remaining != null && remaining > 0 && remaining <= 3 && (
+            <p className="qv-left">⚡ ONLY {remaining} LEFT{size || color ? ' IN THIS PICK' : ''}</p>
+          )}
           <p className="qv-desc">{item.description || `Cut to ${album.title} — ${album.story}`}</p>
           {item.caption && <p className="qv-caption">“{item.caption}”</p>}
 
@@ -239,55 +282,70 @@ function QuickView({ album, item, live, onClose }) {
           {purchasable && colors.length > 0 && (
             <>
               <p className="qv-pick-label">COLOUR</p>
-              <div className="qv-sizes" role="group" aria-label="Colour">
-                {colors.map((c, ci) => (
-                  <button
-                    key={c.name}
-                    className={`qv-size wide ${color === c.name ? 'on' : ''}`}
-                    onClick={() => {
-                      sfx.tick()
-                      const on = color === c.name
-                      setColor(on ? null : c.name)
-                      // a colour with its own photo jumps straight to it;
-                      // legacy colours fall back to the old order guess
-                      if (!on) jump(c.imgIdx ?? designs.length + ci)
-                    }}
-                  >
-                    {c.hex && <i className="qv-swatch" style={{ background: c.hex }} aria-hidden="true" />}
-                    {c.name}
-                  </button>
-                ))}
+              <div className={`qv-sizes ${nudge === 'color' ? 'nudge' : ''}`} role="group" aria-label="Colour">
+                {colors.map((c, ci) => {
+                  const out = colorOut(c.name)
+                  return (
+                    <button
+                      key={c.name}
+                      className={`qv-size wide ${color === c.name ? 'on' : ''} ${out ? 'out' : ''}`}
+                      disabled={out}
+                      onClick={() => {
+                        sfx.tick()
+                        const on = color === c.name
+                        setColor(on ? null : c.name)
+                        // picking a colour drops a size that's dead in it
+                        if (!on && size && sizeOut(size, c.name)) setSize(null)
+                        // a colour with its own photo jumps straight to it;
+                        // legacy colours fall back to the old order guess
+                        if (!on) jump(c.imgIdx ?? designs.length + ci)
+                      }}
+                    >
+                      {c.hex && <i className="qv-swatch" style={{ background: c.hex }} aria-hidden="true" />}
+                      {c.name}
+                      {out && <span className="qv-out-tag">SOLD OUT</span>}
+                    </button>
+                  )
+                })}
               </div>
             </>
           )}
-          {purchasable && (
+          {purchasable && sizes.length > 0 && (
             <>
               <p className="qv-pick-label">SIZE</p>
-              <div className="qv-sizes" role="group" aria-label="Size">
-                {sizes.map((s) => (
-                  <button
-                    key={s}
-                    className={`qv-size ${size === s ? 'on' : ''}`}
-                    onClick={() => {
-                      sfx.tick()
-                      setSize(size === s ? null : s)
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
+              <div className={`qv-sizes ${nudge === 'size' ? 'nudge' : ''}`} role="group" aria-label="Size">
+                {sizes.map((s) => {
+                  const out = sizeOut(s, color)
+                  return (
+                    <button
+                      key={s}
+                      className={`qv-size ${size === s ? 'on' : ''} ${out ? 'out' : ''}`}
+                      disabled={out}
+                      onClick={() => {
+                        sfx.tick()
+                        setSize(size === s ? null : s)
+                      }}
+                    >
+                      {s}
+                    </button>
+                  )
+                })}
               </div>
             </>
           )}
+          {purchasable && !sizes.length && <p className="qv-pick-label">SIZE · ONE SIZE</p>}
 
           <a
-            className="qv-order"
+            className={`qv-order ${needColor || needSize ? 'gated' : ''}`}
             data-cursor="play"
             href={waLink(message)}
+            onClick={gateOrder}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {purchasable ? 'ORDER ON WHATSAPP' : item.soldOut ? 'ASK FOR A RESTOCK' : 'GET NOTIFIED ON WHATSAPP'}
+            {purchasable
+              ? needColor ? 'PICK A COLOUR FIRST' : needSize ? 'PICK A SIZE FIRST' : 'ORDER ON WHATSAPP'
+              : item.soldOut ? 'ASK FOR A RESTOCK' : 'GET NOTIFIED ON WHATSAPP'}
           </a>
           <p className="qv-note">
             NO ONLINE PAYMENT — EVERY ORDER IS CONFIRMED PERSONALLY ON WHATSAPP.

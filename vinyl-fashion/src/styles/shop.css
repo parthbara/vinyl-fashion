@@ -932,6 +932,39 @@
   animation: none;
 }
 
+/* ── announcement bar (admin-set, over the wall) ────────────────── */
+.shop-notice {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  padding: 9px 16px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--bg0);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 86%, #fff 0%), var(--accent));
+  text-transform: uppercase;
+}
+
+/* the record everyone can actually buy today */
+.slot-live {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: #7bd88f;
+  opacity: 0.95;
+}
+
+/* a filter with nothing filed under it */
+.wall-empty {
+  text-align: center;
+  padding: 60px 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  opacity: 0.55;
+}
+
 /* ── wall filter chips (ALL / AVAILABLE / COMING SOON) ─────────── */
 .crate-filters {
   display: flex;

@@ -160,8 +160,9 @@ function QuickView({ album, item, live, onClose }) {
 
   const price = item.salePrice || item.price
   const spec = `${design ? ` · ${design}` : ''}${color ? ` · ${color}` : ''}${size ? ` · size ${size}` : ''}`
+  const capsuleLink = `${window.location.origin}${window.location.pathname}#${album.id}`
   const message = purchasable
-    ? `Hi ${BRAND.name}! I'd like to order the ${item.name} from the ${album.title} capsule${spec} — ${npr(price)}.`
+    ? `Hi ${BRAND.name}! I'd like to order the ${item.name} from the ${album.title} capsule${spec} — ${npr(price)}. (${capsuleLink})`
     : item.soldOut
       ? `Hi ${BRAND.name}! Is the ${item.name} (${album.title} capsule) getting a restock?`
       : `Hi ${BRAND.name}! Put me on the list for the ${item.name} from the ${album.title} capsule.`

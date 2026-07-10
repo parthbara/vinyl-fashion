@@ -217,6 +217,11 @@ export default function Shop({ onOpen, dimmed, openingId }) {
       </div>
       <DustCanvas paused={dimmed} />
 
+      {BRAND.notice && (
+        <div className="shop-notice" role="status">
+          <span>◆ {BRAND.notice} ◆</span>
+        </div>
+      )}
       <header className="shop-head">
         <div className="brand">
           <span className="brand-mark">{BRAND.mark}</span>
@@ -251,6 +256,9 @@ export default function Shop({ onOpen, dimmed, openingId }) {
           ))}
         </div>
         <div className="shelf-wall">
+          {wallAlbums.length === 0 && (
+            <p className="wall-empty">NOTHING FILED HERE YET — FLIP TO THE FULL WALL</p>
+          )}
           {rows.map((row, r) => (
             <div className="shelf" key={r}>
               <div className={`crate ${cols ? 'is-row' : ''}`}>
@@ -529,7 +537,7 @@ function ComingSoonPeek({ album, onClose }) {
             className="soon-peek-btn"
             data-cursor="play"
             style={{ background: p.accent, color: p.bg0 }}
-            href={waLink(`Hi ${BRAND.name}! Notify me the moment the ${album.title} capsule drops.`)}
+            href={waLink(`Hi ${BRAND.name}! Notify me the moment the ${album.title} (${album.artist}) capsule drops.`)}
             target="_blank"
             rel="noopener noreferrer"
           >

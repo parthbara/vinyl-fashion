@@ -22,7 +22,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
   const data = useAlbumData(album)
   const tracks = data?.tracks ?? []
   const featured = findTrack(tracks, album.featured) || tracks[0]
-  const { nowPlaying, isPlaying, playTrack, pause, resume } = useAudio()
+  const { nowPlaying, isPlaying, volume, setVolume, playTrack, pause, resume } = useAudio()
 
   const thisAlbumLoaded = nowPlaying?.albumId === album.id
   const playingThis = thisAlbumLoaded && isPlaying
@@ -223,6 +223,20 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
       <div className={`dock-tt ${dockTucked ? 'is-tucked' : ''}`} ref={dockRef}>
         <Turntable album={album} size="dock" playing={playingThis} onToggle={toggle} />
         <span className="dock-label">{playingThis ? 'ON THE PLATTER' : 'NEEDLE UP'}</span>
+        <div className="dock-vol" title={`Volume ${Math.round(volume * 100)}%`}>
+          <span className="dock-vol-ico" aria-hidden="true">{volume === 0 ? '🔇' : '🔊'}</span>
+          <input
+            type="range"
+            className="dock-vol-slider"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            aria-label="Volume"
+            onChange={(e) => setVolume(Number(e.target.value))}
+            style={{ '--vol': `${volume * 100}%` }}
+          />
+        </div>
       </div>
     </main>
   )

@@ -1068,6 +1068,57 @@ a.foot-line:hover {
   opacity: 0.6;
 }
 
+/* volume slider under the dock turntable */
+.dock-vol {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.dock-vol-ico {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.dock-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  cursor: pointer;
+  /* filled portion (accent) up to the thumb, track behind */
+  background: linear-gradient(
+    to right,
+    var(--accent) 0,
+    var(--accent) var(--vol, 90%),
+    rgba(255, 255, 255, 0.18) var(--vol, 90%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.dock-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ink, #f2ece0);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.dock-vol-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ink, #f2ece0);
+  border: 2px solid var(--accent);
+}
+
 /* ── Per-album flourishes ───────────────────────────────────── */
 
 .theme-mbdtf .capsule-title::before {

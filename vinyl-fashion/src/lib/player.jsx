@@ -16,7 +16,7 @@ import gsap from 'gsap'
 import * as sfx from './sfx'
 import { resolveTrackSrc } from './itunes'
 
-const MUSIC_VOLUME = 0.9
+const MUSIC_VOLUME = 0.9 // default level before the visitor touches the slider
 
 // Keep one context identity across Vite HMR re-evaluations — a hot
 // update to this module used to mint a NEW context, so mounted
@@ -30,6 +30,8 @@ const NOOP_AUDIO = {
   setSound: () => {},
   nowPlaying: null,
   isPlaying: false,
+  volume: MUSIC_VOLUME,
+  setVolume: () => {},
   playTrack: () => {},
   pause: () => {},
   resume: () => {},
@@ -48,6 +50,16 @@ export function AudioProvider({ children }) {
   })
   const [nowPlaying, setNowPlaying] = useState(null) // { albumId, track }
   const [isPlaying, setIsPlaying] = useState(false)
+  // visitor-set playback level (0..1). Held in a ref so the volume
+  // fade-ins always ease toward the CURRENT target, and mirrored in
+  // state so the slider re-renders.
+  const volumeRef = useRef(0)
+  const [volume, setVolumeState] = useState(() => {
+    const saved = Number(localStorage.getItem('vf.volume'))
+    const v = Number.isFinite(saved) && saved >= 0 && saved <= 1 ? saved : MUSIC_VOLUME
+    volumeRef.current = v
+    return v
+  })
   const pendingRef = useRef(null) // track queued after a blocked autoplay
   const playTrackRef = useRef(null)
   // Optional playback window {start, end} in seconds — the IG-story
@@ -106,7 +118,7 @@ export function AudioProvider({ children }) {
         }
       }
       pendingRef.current = null
-      gsap.to(el, { volume: MUSIC_VOLUME, duration: 1.4, ease: 'power1.in' })
+      gsap.to(el, { volume: volumeRef.current, duration: 1.4, ease: 'power1.in' })
       sfx.startCrackle()
       setNowPlaying({ albumId: album.id, track })
       setIsPlaying(true)
@@ -158,7 +170,7 @@ export function AudioProvider({ children }) {
     try {
       await el.play()
       gsap.killTweensOf(el)
-      gsap.to(el, { volume: MUSIC_VOLUME, duration: 0.8, ease: 'power1.in' })
+      gsap.to(el, { volume: volumeRef.current, duration: 0.8, ease: 'power1.in' })
       setIsPlaying(true)
     } catch {
       /* blocked */
@@ -190,9 +202,23 @@ export function AudioProvider({ children }) {
     if (elRef.current) elRef.current.muted = !on
   }, [])
 
+  // Live volume from the album-page slider. Applies immediately (killing
+  // any in-progress fade so the drag wins) and persists for next visit.
+  const setVolume = useCallback((v) => {
+    const vol = Math.max(0, Math.min(1, v))
+    volumeRef.current = vol
+    setVolumeState(vol)
+    localStorage.setItem('vf.volume', String(vol))
+    const el = elRef.current
+    if (el && !el.paused) {
+      gsap.killTweensOf(el)
+      el.volume = vol
+    }
+  }, [])
+
   const value = useMemo(
-    () => ({ soundOn, setSound, nowPlaying, isPlaying, playTrack, pause, resume, stop }),
-    [soundOn, setSound, nowPlaying, isPlaying, playTrack, pause, resume, stop]
+    () => ({ soundOn, setSound, nowPlaying, isPlaying, volume, setVolume, playTrack, pause, resume, stop }),
+    [soundOn, setSound, nowPlaying, isPlaying, volume, setVolume, playTrack, pause, resume, stop]
   )
 
   return <AudioCtx.Provider value={value}>{children}</AudioCtx.Provider>

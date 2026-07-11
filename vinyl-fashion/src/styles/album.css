@@ -1005,16 +1005,61 @@
   text-align: center;
 }
 
+/* ── mobile quick-view: a bottom sheet ──────────────────────────
+   Media pinned on top, details scroll beneath it, and the ORDER
+   button rides the bottom of the scroller — the buy action is never
+   below the fold. The card itself never scrolls, so the ✕ stays put. */
 @media (max-width: 700px) {
+  /* scoped to the product sheet — the coming-soon teaser shares
+     .qv-overlay and stays a centered card */
+  .qv-overlay:has(> .qv-card) {
+    padding: 0;
+    place-items: end center;
+  }
   .qv-card {
     grid-template-columns: 1fr;
-    max-height: 88vh;
-    overflow-y: auto;
+    grid-template-rows: auto 1fr;
+    width: 100%;
+    max-height: none;
+    height: 93vh;
+    height: 93dvh;
+    border-radius: 22px 22px 0 0;
   }
   .qv-media {
-    min-height: 220px;
-    max-height: 280px;
+    height: 36vh;
+    height: 36dvh;
+    min-height: 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
+  .qv-body {
+    padding: 18px 18px calc(16px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+  .qv-order {
+    position: sticky;
+    bottom: -1px;
+    z-index: 1;
+    box-shadow: 0 -18px 26px rgba(10, 8, 7, 0.5), 0 10px 26px rgba(0, 0, 0, 0.35);
+  }
+  .qv-x {
+    top: 12px;
+    right: 12px;
+    width: 38px;
+    height: 38px;
+    background: rgba(0, 0, 0, 0.45);
+  }
+}
+
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
+  .qv-card {
+    animation: qv-sheet 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes qv-sheet {
+  from { opacity: 0; transform: translateY(48px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* ── Footer & dock ──────────────────────────────────────────── */

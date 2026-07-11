@@ -500,6 +500,9 @@ function AddStock() {
   // an optional photo per colour×design combo, keyed "colour¦design".
   // overrides the colour's default photo when that combo is selected.
   const [comboPhotos, setComboPhotos] = useState({})
+  // an optional photo per exact colour×design×size cell, keyed
+  // "colour¦design¦size" — the most specific override of all.
+  const [sizePhotos, setSizePhotos] = useState({})
   // per-combo stock: "colour¦design¦size" → count ('' while editing).
   // untouched cells default to 1, like a fresh pressing of each combo.
   const [cells, setCells] = useState({})
@@ -552,6 +555,7 @@ function AddStock() {
   const cellKey = (c, d, sz) => `${c ? c.name.trim() : ''}¦${d || ''}¦${sz || ''}`
   const isExcluded = (c, d) => !!excluded[comboKey(c, d)]
   const setComboPhoto = (c, d, file) => setComboPhotos((m) => ({ ...m, [comboKey(c, d)]: file }))
+  const setSizePhoto = (c, d, sz, file) => setSizePhotos((m) => ({ ...m, [cellKey(c, d, sz)]: file }))
   const toggleCombo = (c, d) =>
     setExcluded((x) => {
       const k = comboKey(c, d)
@@ -601,8 +605,8 @@ function AddStock() {
     setMsg(null)
     try {
       // photos are appended after the main carousel, in a fixed order:
-      //   [main files] → [colour default photos] → [combo photos]
-      // each colour/combo remembers the index of its own uploaded shot
+      //   [main] → [colour defaults] → [combo photos] → [per-size photos]
+      // each level remembers the index of its own uploaded shot
       let nextIdx = files.length
       const colorImg = new Map()
       const colorFiles = []
@@ -616,12 +620,27 @@ function AddStock() {
         const file = comboPhotos[comboKey(c, d)]
         if (file) { comboImg.set(comboKey(c, d), nextIdx++); comboFiles.push(file) }
       })
-      const allFiles = [...files, ...colorFiles, ...comboFiles]
+      const sizeImg = new Map() // cellKey → image index
+      const sizeFiles = []
+      activeCombos.forEach(({ c, d }) =>
+        effSizes.forEach((sz) => {
+          const file = sizePhotos[cellKey(c, d, sz)]
+          if (file) { sizeImg.set(cellKey(c, d, sz), nextIdx++); sizeFiles.push(file) }
+        })
+      )
+      const allFiles = [...files, ...colorFiles, ...comboFiles, ...sizeFiles]
+      // the photo a specific colour×design×size shows: its own → its
+      // combo's → its colour's default → none
+      const resolveImg = (c, d, sz) => {
+        const ck = cellKey(c, d, sz)
+        if (sizeImg.has(ck)) return sizeImg.get(ck)
+        const mk = comboKey(c, d)
+        if (comboImg.has(mk)) return comboImg.get(mk)
+        return c ? colorImg.get(c) : ''
+      }
       // encode a full variant line as
       //   combo:ColourName|#hex|imgIdx|DesignLabel   (+ size in its own col)
-      // imgIdx points at the combo's own photo, else its colour default, else ''
-      const comboColor = (c, d) => {
-        const img = comboImg.has(comboKey(c, d)) ? comboImg.get(comboKey(c, d)) : c ? colorImg.get(c) : ''
+      const comboColor = (c, d, img) => {
         const cs = c ? `${c.name.trim()}|${c.hex || ''}|${img}` : `||${img || ''}`
         return `combo:${cs}|${d || ''}`
       }
@@ -629,7 +648,7 @@ function AddStock() {
       const combos = showGrid
         ? activeCombos.flatMap(({ c, d }) =>
             effSizes.map((sz) => ({
-              color: comboColor(c, d),
+              color: comboColor(c, d, resolveImg(c, d, sz)),
               size: sz || null,
               stock: cellNum(cellKey(c, d, sz)),
             }))
@@ -659,6 +678,7 @@ function AddStock() {
       setDesignRows([])
       setExcluded({})
       setComboPhotos({})
+      setSizePhotos({})
       setCells({})
       if (fileRef.current) fileRef.current.value = ''
     } catch (ex) {
@@ -896,17 +916,31 @@ function AddStock() {
                           </td>
                           {effSizes.map((sz) => {
                             const k = cellKey(c, d, sz)
+                            const szPhoto = sizePhotos[k]
                             return (
                               <td key={k}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  disabled={off}
-                                  value={off ? '' : cellShown(k)}
-                                  className={!off && cellNum(k) === 0 ? 'out' : ''}
-                                  onChange={(e) => setCells((cs) => ({ ...cs, [k]: e.target.value }))}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                                />
+                                <div className="cmb-cell">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    disabled={off}
+                                    value={off ? '' : cellShown(k)}
+                                    className={!off && cellNum(k) === 0 ? 'out' : ''}
+                                    onChange={(e) => setCells((cs) => ({ ...cs, [k]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                                  />
+                                  {!off && (
+                                    <span className="cmb-cell-photo-wrap">
+                                      <label className={`cmb-cell-photo ${szPhoto ? 'has' : ''}`} title="Optional photo for this exact size (overrides the combo photo)">
+                                        <input type="file" accept="image/*" hidden onChange={(e) => setSizePhoto(c, d, sz, e.target.files[0] || null)} />
+                                        {szPhoto ? <img src={URL.createObjectURL(szPhoto)} alt="" /> : <span>＋ pic</span>}
+                                      </label>
+                                      {szPhoto && (
+                                        <button type="button" className="cmb-cell-photo-x" onClick={() => setSizePhoto(c, d, sz, null)} aria-label="Remove size photo">×</button>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                             )
                           })}
@@ -920,6 +954,7 @@ function AddStock() {
             </div>
             <p className="adm-note" style={{ marginTop: 6 }}>
               ✓ = this combo exists · ＋ = switched off (won’t be created) · set a size to 0 to show it sold-out.
+              Photo priority: the size’s own “＋ pic” → the combo’s PHOTO → the colour’s photo. Add only the ones you need.
             </p>
           </div>
         </>

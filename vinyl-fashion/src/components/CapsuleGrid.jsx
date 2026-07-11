@@ -142,8 +142,13 @@ function QuickView({ album, item, live, onClose }) {
   const colorOut = (cName) => isOut({ color: cName, design })
   const designOut = (dLabel) => isOut({ color, design: dLabel })
   const sizeOut = (sz) => isOut({ color, design, size: sz })
-  // the photo index for a colour×design combo, if one was uploaded
-  const comboImg = (cName, dLabel) => {
+  // the photo index for a variant, as specific as the pick allows:
+  // exact colour×design×size → colour×design → colour
+  const comboImg = (cName, dLabel, sz = null) => {
+    if (sz != null) {
+      const exact = vrows.find((r) => r.color === cName && r.design === dLabel && r.size === sz && r.imgIdx != null)
+      if (exact) return exact.imgIdx
+    }
     const row = vrows.find(
       (r) => (cName == null || r.color === cName) && (dLabel == null || r.design === dLabel) && r.imgIdx != null
     )
@@ -346,7 +351,13 @@ function QuickView({ album, item, live, onClose }) {
                       disabled={out}
                       onClick={() => {
                         sfx.tick()
-                        setSize(size === s ? null : s)
+                        const on = size === s
+                        setSize(on ? null : s)
+                        // jump to this exact size's own photo if it has one
+                        if (!on) {
+                          const i = comboImg(color, design, s)
+                          if (i != null) jump(i)
+                        }
                       }}
                     >
                       {s}

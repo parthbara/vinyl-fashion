@@ -641,7 +641,9 @@ function AddStock() {
       // encode a full variant line as
       //   combo:ColourName|#hex|imgIdx|DesignLabel   (+ size in its own col)
       const comboColor = (c, d, img) => {
-        const cs = c ? `${c.name.trim()}|${c.hex || ''}|${img}` : `||${img || ''}`
+        // '|' is the field separator — scrub it out of the colour name
+        const nm = c ? c.name.trim().replace(/\|/g, '·') : ''
+        const cs = c ? `${nm}|${c.hex || ''}|${img}` : `||${img || ''}`
         return `combo:${cs}|${d || ''}`
       }
       // every active colour×design×size combo becomes its own stock row

@@ -54,7 +54,8 @@ export default function AlbumPage({ album, revealOrigin, direct = false, closing
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return
-      if (closing || document.querySelector('.qv-overlay')) return
+      // a quick-view or the assistant owns Esc while open
+      if (closing || document.querySelector('.qv-overlay, .assistant')) return
       onClose()
     }
     window.addEventListener('keydown', onKey)

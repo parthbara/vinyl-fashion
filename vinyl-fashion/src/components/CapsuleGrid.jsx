@@ -134,9 +134,15 @@ function QuickView({ album, item, live, onClose }) {
     if (!rows.length) return { stock: null, matched: false }
     return { stock: rows.reduce((s, r) => s + (r.stock || 0), 0), matched: true }
   }
+  // combo-built products enumerate every pairing that EXISTS — so a
+  // pairing with no rows was excluded in the studio and must read as
+  // unavailable. Legacy products (no colour×design rows) stay sparse:
+  // unknown combos remain available.
+  const hasCombos = vrows.some((r) => r.color && r.design)
   const isOut = (filter) => {
     const { stock, matched } = stockFor(filter)
-    return matched && stock <= 0
+    if (matched) return stock <= 0
+    return hasCombos && (filter.color != null || filter.design != null)
   }
   // each axis respects what's already picked on the others
   const colorOut = (cName) => isOut({ color: cName, design })
@@ -270,7 +276,7 @@ function QuickView({ album, item, live, onClose }) {
             )}
           </p>
           {purchasable && remaining != null && remaining > 0 && remaining <= 3 && (
-            <p className="qv-left">⚡ ONLY {remaining} LEFT{size || color ? ' IN THIS PICK' : ''}</p>
+            <p className="qv-left">⚡ ONLY {remaining} LEFT{size || color || design ? ' IN THIS PICK' : ''}</p>
           )}
           <p className="qv-desc">{item.description || `Cut to ${album.title} — ${album.story}`}</p>
           {item.caption && <p className="qv-caption">“{item.caption}”</p>}

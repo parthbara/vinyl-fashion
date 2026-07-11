@@ -14,7 +14,8 @@ const npr = (n) => `NPR ${Number(n).toLocaleString()}`
 // order line — a shop, not a mock.
 export default function CapsuleGrid({ album }) {
   const products = useProducts(album.id)
-  const live = products && products.length > 0
+  const loading = products === undefined // fetch still in flight
+  const live = !!(products && products.length > 0)
   const items = live ? products : album.capsule
   const notes = album.notes ?? []
   const [view, setView] = useState(null) // item in the quick-view
@@ -68,7 +69,7 @@ export default function CapsuleGrid({ album }) {
             <span className="garment-order">{item.soldOut ? 'DETAILS' : 'ORDER'}</span>
           </div>
         ) : (
-          <p className="garment-price">— COMING SOON —</p>
+          <p className="garment-price">{loading ? '· · ·' : '— COMING SOON —'}</p>
         )}
       </article>
     )
@@ -94,9 +95,11 @@ export default function CapsuleGrid({ album }) {
           {(album.capsuleTitle || album.title).toUpperCase()} COLLECTION
         </h3>
         <p className="capsule-note" data-reveal>
-          {live
-            ? `${items.length} PIECE${items.length === 1 ? '' : 'S'} · CUT TO ${album.title.toUpperCase()}`
-            : `SIX PIECES IN DEVELOPMENT · CUT TO ${album.title.toUpperCase()} · DROP DATE TBA`}
+          {loading
+            ? 'PULLING FROM THE RACKS…'
+            : live
+              ? `${items.length} PIECE${items.length === 1 ? '' : 'S'} · CUT TO ${album.title.toUpperCase()}`
+              : `SIX PIECES IN DEVELOPMENT · CUT TO ${album.title.toUpperCase()} · DROP DATE TBA`}
         </p>
       </header>
       <div className="capsule-grid">{cells}</div>
@@ -161,6 +164,12 @@ function QuickView({ album, item, live, onClose }) {
     return row ? row.imgIdx : null
   }
   const images = useMemo(() => (item.images?.length ? item.images : item.image ? [item.image] : []), [item])
+
+  // freeze the page behind the sheet — the modal owns all scrolling
+  useEffect(() => {
+    document.body.classList.add('qv-lock')
+    return () => document.body.classList.remove('qv-lock')
+  }, [])
 
   useEffect(() => {
     const onKey = (e) => {

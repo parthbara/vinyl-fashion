@@ -21,13 +21,65 @@ function imageUrl(ref) {
 function normalizeProduct(row) {
   const images = Array.isArray(row.images) ? row.images : []
   const variants = row.product_variants || []
-  const labels = variants.map((v) => v.color).filter(Boolean)
-  const clean = (prefix) =>
-    labels
-      .filter((v) => v.startsWith(prefix))
-      .map((v) => v.slice(prefix.length).trim())
-      .filter(Boolean)
-  const legacyDesigns = labels.filter((v) => !v.startsWith('design:') && !v.startsWith('color:'))
+
+  // Option labels live in product_variants.color, prefixed by kind:
+  //   combo:Name|#hex|imgIdx|Design   → a full colour×design line (+ size col)
+  //   color:Name|#hex|imgIdx          → a colour (legacy, may carry a size)
+  //   design:Label                    → a bare design label
+  //   <plain>                         → legacy = a design label
+  // We fold them all into one flat variantRows[] the storefront reasons over.
+  const colorsByName = new Map() // name → { name, hex, imgIdx }
+  const designSet = new Set()
+  const sizeSet = new Set()
+  const variantRows = [] // { color, design, size, stock }
+
+  const addColor = (name, hex, idx) => {
+    const nm = (name || '').trim()
+    if (!nm) return
+    const existing = colorsByName.get(nm)
+    if (!existing) colorsByName.set(nm, { name: nm, hex: (hex || '').trim() || null, imgIdx: idx })
+    else if (existing.imgIdx == null && idx != null) existing.imgIdx = idx
+  }
+
+  for (const v of variants) {
+    const c = v.color || ''
+    const size = v.size || null
+    if (size) sizeSet.add(size)
+    const stock = v.stock ?? 0
+
+    if (c.startsWith('combo:')) {
+      const parts = c.slice('combo:'.length).split('|')
+      const name = (parts[0] || '').trim()
+      const idxRaw = parts[2]
+      const idx = idxRaw !== '' && idxRaw != null ? Number(idxRaw) : null
+      const design = parts.slice(3).join('|').trim() || null
+      if (name) addColor(name, parts[1], idx)
+      if (design) designSet.add(design)
+      variantRows.push({ color: name || null, design, size, stock, imgIdx: idx })
+    } else if (c.startsWith('color:')) {
+      const [name, hex, idxRaw] = c.slice('color:'.length).split('|')
+      const idx = idxRaw !== undefined && idxRaw !== '' ? Number(idxRaw) : null
+      if ((name || '').trim()) addColor(name, hex, idx)
+      variantRows.push({ color: (name || '').trim() || null, design: null, size, stock })
+    } else if (c.startsWith('design:')) {
+      const d = c.slice('design:'.length).trim()
+      if (d) designSet.add(d)
+    } else if (c) {
+      designSet.add(c.trim()) // legacy plain = a design
+    } else if (size) {
+      variantRows.push({ color: null, design: null, size, stock }) // size-only stock
+    }
+  }
+
+  // aggregate "colourName¦size" stock — kept for the existing availability
+  // helpers; sparse (unknown combos treated as available)
+  const stockMap = {}
+  for (const vr of variantRows) {
+    if (!vr.color && !vr.size) continue
+    const key = `${vr.color || ''}¦${vr.size || ''}`
+    stockMap[key] = (stockMap[key] || 0) + (vr.stock || 0)
+  }
+
   return {
     id: row.id,
     name: row.title,
@@ -39,34 +91,11 @@ function normalizeProduct(row) {
     description: row.description || null,
     image: imageUrl(images[0]),
     images: images.map(imageUrl).filter(Boolean),
-    // Existing DB stores option labels in product_variants.color. New rows
-    // prefix labels as design:/color: so the storefront can split them.
-    designs: [...new Set([...clean('design:'), ...legacyDesigns])],
-    // colour labels may encode "Name|#hex|imageIndex" (admin colour rows);
-    // legacy plain names parse to a swatch-less colour with no photo link
-    colors: [...new Set(clean('color:'))].map((raw) => {
-      const [name, hex, idx] = raw.split('|')
-      return {
-        name: (name || '').trim(),
-        hex: (hex || '').trim() || null,
-        imgIdx: idx !== undefined && idx !== '' ? Number(idx) : null,
-      }
-    }),
-    sizes: [...new Set(variants.map((v) => v.size).filter(Boolean))],
-    // per-combo stock: "colourName¦size" → count ('' for a missing half).
-    // Legacy rows without combos simply leave this sparse — unknown
-    // combos are treated as available.
-    stockMap: variants.reduce((m, v) => {
-      if ((v.color || '').startsWith('design:')) return m
-      const cname = (v.color || '').startsWith('color:')
-        ? v.color.slice('color:'.length).split('|')[0].trim()
-        : ''
-      const size = v.size || ''
-      if (!cname && !size) return m
-      const key = `${cname}¦${size}`
-      m[key] = (m[key] || 0) + (v.stock ?? 0)
-      return m
-    }, {}),
+    designs: [...designSet],
+    colors: [...colorsByName.values()],
+    sizes: [...sizeSet],
+    variantRows, // full colour×design×size stock lines
+    stockMap,
     soldOut: row.status === 'soldout' || row.stock === 0,
   }
 }

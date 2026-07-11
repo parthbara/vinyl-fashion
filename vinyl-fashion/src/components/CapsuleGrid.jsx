@@ -111,7 +111,7 @@ function QuickView({ album, item, live, onClose }) {
   const [design, setDesign] = useState(null)
   const [color, setColor] = useState(null)
   const [idx, setIdx] = useState(0)
-  const [nudge, setNudge] = useState(null) // 'size' | 'color' — shake the row they skipped
+  const [nudge, setNudge] = useState(null) // 'size' | 'color' | 'design' — shake the skipped row
 
   const purchasable = live && item.price && !item.soldOut
   const designs = item.designs || []
@@ -119,20 +119,35 @@ function QuickView({ album, item, live, onClose }) {
   // only REAL sizes — never invent S/M/L that don't exist in stock
   const sizes = item.sizes || []
 
-  // ── per-combo availability (colour × size stock grid) ──────────
-  // sparse map — combos the admin never counted stay available
-  const sm = item.stockMap || {}
-  const colorOut = (cName) => {
-    const keys = Object.keys(sm).filter((k) => k.startsWith(cName + '¦'))
-    return keys.length > 0 && keys.every((k) => sm[k] <= 0)
+  // ── per-combo availability (colour × design × size lines) ──────
+  // Each variant row is one real combo with its own stock. A filter
+  // field left null means "any". If no row constrains a combo we treat
+  // it as available (sparse data from simple/legacy products).
+  const vrows = item.variantRows || []
+  const stockFor = ({ color: fc = null, design: fd = null, size: fs = null }) => {
+    const rows = vrows.filter(
+      (r) =>
+        (fc == null || r.color === fc) &&
+        (fd == null || r.design === fd) &&
+        (fs == null || r.size === fs)
+    )
+    if (!rows.length) return { stock: null, matched: false }
+    return { stock: rows.reduce((s, r) => s + (r.stock || 0), 0), matched: true }
   }
-  const sizeOut = (sz, cName) => {
-    if (cName) {
-      const v = sm[`${cName}¦${sz}`]
-      if (v != null) return v <= 0
-    }
-    const keys = Object.keys(sm).filter((k) => k.endsWith('¦' + sz))
-    return keys.length > 0 && keys.every((k) => sm[k] <= 0)
+  const isOut = (filter) => {
+    const { stock, matched } = stockFor(filter)
+    return matched && stock <= 0
+  }
+  // each axis respects what's already picked on the others
+  const colorOut = (cName) => isOut({ color: cName, design })
+  const designOut = (dLabel) => isOut({ color, design: dLabel })
+  const sizeOut = (sz) => isOut({ color, design, size: sz })
+  // the photo index for a colour×design combo, if one was uploaded
+  const comboImg = (cName, dLabel) => {
+    const row = vrows.find(
+      (r) => (cName == null || r.color === cName) && (dLabel == null || r.design === dLabel) && r.imgIdx != null
+    )
+    return row ? row.imgIdx : null
   }
   const images = useMemo(() => (item.images?.length ? item.images : item.image ? [item.image] : []), [item])
 
@@ -167,28 +182,24 @@ function QuickView({ album, item, live, onClose }) {
       ? `Hi ${BRAND.name}! Is the ${item.name} (${album.title} capsule) getting a restock?`
       : `Hi ${BRAND.name}! Put me on the list for the ${item.name} from the ${album.title} capsule.`
 
-  // a real order names its colour and size — hold the button until then
+  // a real order names its colour, design and size — hold the button
   const needColor = purchasable && colors.length > 0 && !color
+  const needDesign = purchasable && designs.length > 0 && !design
   const needSize = purchasable && sizes.length > 0 && !size
   const gateOrder = (e) => {
-    if (!purchasable || (!needColor && !needSize)) return
+    if (!purchasable || (!needColor && !needDesign && !needSize)) return
     e.preventDefault()
     sfx.pop()
-    const what = needColor ? 'color' : 'size'
+    const what = needColor ? 'color' : needDesign ? 'design' : 'size'
     setNudge(what)
     setTimeout(() => setNudge(null), 650)
   }
 
-  // stock for the current selection: exact combo → colour/size row → item
+  // stock for the current selection (as specific as they've picked)
   const remaining = (() => {
     if (!purchasable) return null
-    const tries = [
-      color || size ? `${color || ''}¦${size || ''}` : null,
-      color ? `${color}¦` : null,
-      size ? `¦${size}` : null,
-    ].filter(Boolean)
-    for (const k of tries) if (sm[k] != null) return sm[k]
-    return item.stock ?? null
+    const { stock, matched } = stockFor({ color, design, size })
+    return matched ? stock : item.stock ?? null
   })()
 
   // portal to <body>: inside the page, sibling sections (footer) stack
@@ -262,21 +273,27 @@ function QuickView({ album, item, live, onClose }) {
           {purchasable && designs.length > 0 && (
             <>
               <p className="qv-pick-label">DESIGN</p>
-              <div className="qv-sizes" role="group" aria-label="Design">
-                {designs.map((d, di) => (
-                  <button
-                    key={d}
-                    className={`qv-size wide ${design === d ? 'on' : ''}`}
-                    onClick={() => {
-                      sfx.tick()
-                      const on = design === d
-                      setDesign(on ? null : d)
-                      if (!on) jump(di)
-                    }}
-                  >
-                    {d}
-                  </button>
-                ))}
+              <div className={`qv-sizes ${nudge === 'design' ? 'nudge' : ''}`} role="group" aria-label="Design">
+                {designs.map((d, di) => {
+                  const out = designOut(d)
+                  return (
+                    <button
+                      key={d}
+                      className={`qv-size wide ${design === d ? 'on' : ''} ${out ? 'out' : ''}`}
+                      disabled={out}
+                      onClick={() => {
+                        sfx.tick()
+                        const on = design === d
+                        setDesign(on ? null : d)
+                        // jump to this colour×design's photo, else the design slot
+                        if (!on) jump(comboImg(color, d) ?? di)
+                      }}
+                    >
+                      {d}
+                      {out && <span className="qv-out-tag">SOLD OUT</span>}
+                    </button>
+                  )
+                })}
               </div>
             </>
           )}
@@ -294,12 +311,17 @@ function QuickView({ album, item, live, onClose }) {
                       onClick={() => {
                         sfx.tick()
                         const on = color === c.name
-                        setColor(on ? null : c.name)
-                        // picking a colour drops a size that's dead in it
-                        if (!on && size && sizeOut(size, c.name)) setSize(null)
-                        // a colour with its own photo jumps straight to it;
-                        // legacy colours fall back to the old order guess
-                        if (!on) jump(c.imgIdx ?? designs.length + ci)
+                        const nextColor = on ? null : c.name
+                        setColor(nextColor)
+                        // picking a colour drops a design/size dead under it
+                        if (!on) {
+                          const keepDesign = design && !isOut({ color: nextColor, design })
+                          if (design && !keepDesign) setDesign(null)
+                          if (size && isOut({ color: nextColor, design, size })) setSize(null)
+                          // the exact combo photo if a design's held, else the
+                          // colour's own photo, else the old order guess
+                          jump(comboImg(nextColor, keepDesign ? design : null) ?? c.imgIdx ?? designs.length + ci)
+                        }
                       }}
                     >
                       {c.hex && <i className="qv-swatch" style={{ background: c.hex }} aria-hidden="true" />}
@@ -316,7 +338,7 @@ function QuickView({ album, item, live, onClose }) {
               <p className="qv-pick-label">SIZE</p>
               <div className={`qv-sizes ${nudge === 'size' ? 'nudge' : ''}`} role="group" aria-label="Size">
                 {sizes.map((s) => {
-                  const out = sizeOut(s, color)
+                  const out = sizeOut(s)
                   return (
                     <button
                       key={s}
@@ -337,7 +359,7 @@ function QuickView({ album, item, live, onClose }) {
           {purchasable && !sizes.length && <p className="qv-pick-label">SIZE · ONE SIZE</p>}
 
           <a
-            className={`qv-order ${needColor || needSize ? 'gated' : ''}`}
+            className={`qv-order ${needColor || needDesign || needSize ? 'gated' : ''}`}
             data-cursor="play"
             href={waLink(message)}
             onClick={gateOrder}
@@ -345,7 +367,10 @@ function QuickView({ album, item, live, onClose }) {
             rel="noopener noreferrer"
           >
             {purchasable
-              ? needColor ? 'PICK A COLOUR FIRST' : needSize ? 'PICK A SIZE FIRST' : 'ORDER ON WHATSAPP'
+              ? needColor ? 'PICK A COLOUR FIRST'
+                : needDesign ? 'PICK A DESIGN FIRST'
+                : needSize ? 'PICK A SIZE FIRST'
+                : 'ORDER ON WHATSAPP'
               : item.soldOut ? 'ASK FOR A RESTOCK' : 'GET NOTIFIED ON WHATSAPP'}
           </a>
           <p className="qv-note">

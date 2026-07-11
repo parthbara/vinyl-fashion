@@ -55,8 +55,12 @@ export function AudioProvider({ children }) {
   // state so the slider re-renders.
   const volumeRef = useRef(0)
   const [volume, setVolumeState] = useState(() => {
-    const saved = Number(localStorage.getItem('vf.volume'))
-    const v = Number.isFinite(saved) && saved >= 0 && saved <= 1 ? saved : MUSIC_VOLUME
+    // NB: Number(null) === 0, so parse the raw string — a visitor who
+    // never touched the slider must NOT start muted. A stored 0 (muted
+    // last session) also resets to the default: mute is a session action.
+    const raw = localStorage.getItem('vf.volume')
+    const saved = raw == null ? NaN : Number(raw)
+    const v = Number.isFinite(saved) && saved > 0 && saved <= 1 ? saved : MUSIC_VOLUME
     volumeRef.current = v
     return v
   })

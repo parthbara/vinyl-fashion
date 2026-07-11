@@ -12,7 +12,7 @@ const npr = (n) => `NPR ${Number(n).toLocaleString()}`
 // placeholder capsule silhouettes. Every piece opens a quick-view
 // with an image carousel, design/colour/size pickers and a WhatsApp
 // order line — a shop, not a mock.
-export default function CapsuleGrid({ album, featuredName }) {
+export default function CapsuleGrid({ album }) {
   const products = useProducts(album.id)
   const live = products && products.length > 0
   const items = live ? products : album.capsule

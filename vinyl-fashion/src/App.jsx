@@ -26,6 +26,9 @@ export default function App() {
   }, [])
   const [originRect, setOriginRect] = useState(null)
   const [revealOrigin, setRevealOrigin] = useState(null)
+  // opened straight to an album (deep link / reload) with no cinematic —
+  // the album page must reveal its own corner dock in that case
+  const [directMount, setDirectMount] = useState(false)
   const { stop } = useAudio()
   const albums = useAlbums()
 
@@ -40,9 +43,25 @@ export default function App() {
     setPhase((p) => {
       if (p !== 'intro') return p
       setActive(album)
+      setDirectMount(true)
       applyTheme(album, { duration: 0.6 })
       setRevealOrigin({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
       return 'album'
+    })
+  }, [albums])
+
+  // Keep the open album in sync with the live crate: on a deep-link
+  // reload the page first mounts with the built-in SEED album (instant),
+  // then the DB list lands — re-point `active` so the real uploaded song,
+  // clip and edits replace the seed placeholders.
+  useEffect(() => {
+    setActive((cur) => {
+      if (!cur) return cur
+      const fresh = albums.find((a) => a.id === cur.id)
+      if (!fresh || fresh === cur) return cur
+      // the Studio palette may differ from the seed's — re-theme quietly
+      applyTheme(fresh, { duration: 0.5 })
+      return fresh
     })
   }, [albums])
 
@@ -73,6 +92,7 @@ export default function App() {
       if (p !== 'shop') return p
       sfx.unlock()
       setActive(album)
+      setDirectMount(false)
       setOriginRect(rect)
       applyTheme(album, { duration: 1.5 })
       // the record's shareable address
@@ -119,6 +139,7 @@ export default function App() {
         <AlbumPage
           album={active}
           revealOrigin={revealOrigin}
+          direct={directMount}
           closing={phase === 'closing'}
           onClose={handleClose}
           onClosed={handleClosed}

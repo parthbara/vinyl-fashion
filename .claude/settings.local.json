@@ -16,7 +16,8 @@
       "Bash(grep -n \"replace\\(/\\\\[\" src/components/Shop.jsx)",
       "Bash(node -e ' *)",
       "Bash(npm run *)",
-      "Bash(git commit -m 'Per-color photos & swatches, portal overlays, artist match fix, capsule heading control *)"
+      "Bash(git commit -m 'Per-color photos & swatches, portal overlays, artist match fix, capsule heading control *)",
+      "Bash(node -e \"console.log\\('Number\\(null\\) =', Number\\(null\\)\\)\")"
     ]
   }
 }

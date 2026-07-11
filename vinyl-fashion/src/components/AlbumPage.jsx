@@ -11,11 +11,18 @@ import Turntable from './Turntable'
 import CapsuleGrid from './CapsuleGrid'
 import * as sfx from '../lib/sfx'
 
+// iOS ignores programmatic volume (hardware buttons only) — the slider
+// would be a dead control there, so it hides; the mute toggle still works.
+const IS_IOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+
 // A whole storefront re-skinned to one record — clothes first.
 // A sticky record rail (cover, story, now-spinning) holds the vibe
 // while the capsule grid owns the viewport. The page mounts hidden
 // during the cinematic and reveals as the deck flies to its dock.
-export default function AlbumPage({ album, revealOrigin, closing, onClose, onClosed }) {
+export default function AlbumPage({ album, revealOrigin, direct = false, closing, onClose, onClosed }) {
   const rootRef = useRef(null)
   const dockRef = useRef(null)
   const lastVolRef = useRef(0.9) // level to restore after a mute
@@ -42,6 +49,18 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
     else if (featured) playTrack(album, featured)
   }
 
+  // Esc returns the record — unless a quick-view modal is open (it owns
+  // Esc and closes itself), or we're already on the way out.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (closing || document.querySelector('.qv-overlay')) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [closing, onClose])
+
   // the record names the tab while it's open (and any shared link)
   useEffect(() => {
     const prev = document.title
@@ -67,7 +86,10 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
       return
     }
     const tl = gsap.timeline()
-    tl.set(dockRef.current, { autoAlpha: 0 }, 0)
+    // On a cinematic handoff the OpeningScene reveals the dock when the
+    // flying deck lands in it; on a direct mount (deep link / reload)
+    // there is no cinematic, so the page reveals its own dock.
+    tl.set(dockRef.current, { autoAlpha: direct ? 1 : 0 }, 0)
       .set(root, { visibility: 'visible' }, 0)
       .fromTo(root, { opacity: 0 }, { opacity: 1, duration: 0.55, ease: 'power1.out' }, 0)
       .fromTo(
@@ -209,7 +231,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
           </div>
         </aside>
 
-        <CapsuleGrid album={album} featuredName={featured?.name} />
+        <CapsuleGrid album={album} />
       </div>
 
       <footer className="album-foot">
@@ -273,7 +295,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
           >
             {volume === 0 ? '🔇' : '🔊'}
           </button>
-          <input
+          {!IS_IOS && <input
             type="range"
             className="dock-vol-slider"
             min="0"
@@ -283,7 +305,7 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
             aria-label="Volume"
             onChange={(e) => setVolume(Number(e.target.value))}
             style={{ '--vol': `${volume * 100}%` }}
-          />
+          />}
         </div>
       </div>
     </main>

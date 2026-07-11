@@ -71,15 +71,6 @@ function normalizeProduct(row) {
     }
   }
 
-  // aggregate "colourName¦size" stock — kept for the existing availability
-  // helpers; sparse (unknown combos treated as available)
-  const stockMap = {}
-  for (const vr of variantRows) {
-    if (!vr.color && !vr.size) continue
-    const key = `${vr.color || ''}¦${vr.size || ''}`
-    stockMap[key] = (stockMap[key] || 0) + (vr.stock || 0)
-  }
-
   return {
     id: row.id,
     name: row.title,
@@ -95,7 +86,6 @@ function normalizeProduct(row) {
     colors: [...colorsByName.values()],
     sizes: [...sizeSet],
     variantRows, // full colour×design×size stock lines
-    stockMap,
     soldOut: row.status === 'soldout' || row.stock === 0,
   }
 }

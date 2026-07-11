@@ -461,6 +461,7 @@ const EMPTY = { title: '', album_id: ALBUMS[0].id, garment_type: 'tee', category
 const SIZE_PRESETS = {
   alpha: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
   numeric: ['28', '30', '32', '34', '36', '38', '40'],
+  fit: ['Cropped Box', 'Regular', 'Oversize'],
 }
 const COLOR_PRESETS = {
   base: [
@@ -489,7 +490,17 @@ function AddStock() {
   const [sizeInput, setSizeInput] = useState('')
   const [colorRows, setColorRows] = useState([])
   const [openPicker, setOpenPicker] = useState(null) // index of the open colour wheel
-  // per-variant stock grid: "colour¦size" → count ('' while being edited).
+  // design variants: each has a name and can optionally also come in a
+  // mirrored / flipped orientation (front↔back), which expands to a
+  // second design label automatically.
+  const [designRows, setDesignRows] = useState([])
+  // combos the user has switched OFF (e.g. Cyan has no Blue design).
+  // keyed "colour¦design"; absent = the combo exists.
+  const [excluded, setExcluded] = useState({})
+  // an optional photo per colour×design combo, keyed "colour¦design".
+  // overrides the colour's default photo when that combo is selected.
+  const [comboPhotos, setComboPhotos] = useState({})
+  // per-combo stock: "colour¦design¦size" → count ('' while editing).
   // untouched cells default to 1, like a fresh pressing of each combo.
   const [cells, setCells] = useState({})
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -521,12 +532,39 @@ function AddStock() {
         .filter((c) => !c.name.trim() || !rs.some((r) => r.name.trim().toLowerCase() === c.name.trim().toLowerCase()))
         .map((c) => ({ file: null, ...c })),
     ])
-  // ── stock-per-variant grid (colour rows × sizes) ────────────────
+  // design rows: name + optional flipped orientation
+  const setDesignRow = (i, patch) => setDesignRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const removeDesignRow = (i) => setDesignRows((rs) => rs.filter((_, j) => j !== i))
+  const addDesignRow = () => setDesignRows((rs) => [...rs, { name: '', flipped: false }])
+
+  // ── the combo calibration grid (colour × design × size) ─────────
   const namedColors = colorRows.filter((r) => r.name.trim())
-  const showMatrix = namedColors.length > 0 || f.sizes.length > 0
-  const effColors = namedColors.length ? namedColors : [null] // null = "all colours"
+  // a design that also comes flipped expands into two labels
+  const designLabels = designRows
+    .filter((d) => d.name.trim())
+    .flatMap((d) => (d.flipped ? [d.name.trim(), `${d.name.trim()} (flipped)`] : [d.name.trim()]))
+  const effColors = namedColors.length ? namedColors : [null] // null = one colour
+  const effDesigns = designLabels.length ? designLabels : [null] // null = one design
   const effSizes = f.sizes.length ? f.sizes : [null] // null = one-size
-  const cellKey = (r, sz) => `${r ? r.name.trim() : ''}¦${sz || ''}`
+  const showGrid = namedColors.length > 0 || designLabels.length > 0 || f.sizes.length > 0
+
+  const comboKey = (c, d) => `${c ? c.name.trim() : ''}¦${d || ''}`
+  const cellKey = (c, d, sz) => `${c ? c.name.trim() : ''}¦${d || ''}¦${sz || ''}`
+  const isExcluded = (c, d) => !!excluded[comboKey(c, d)]
+  const setComboPhoto = (c, d, file) => setComboPhotos((m) => ({ ...m, [comboKey(c, d)]: file }))
+  const toggleCombo = (c, d) =>
+    setExcluded((x) => {
+      const k = comboKey(c, d)
+      const next = { ...x }
+      if (next[k]) delete next[k]
+      else next[k] = true
+      return next
+    })
+  // every colour×design pairing the user hasn't switched off
+  const activeCombos = effColors
+    .flatMap((c) => effDesigns.map((d) => ({ c, d })))
+    .filter(({ c, d }) => !isExcluded(c, d))
+
   const cellShown = (k) => (cells[k] === undefined ? 1 : cells[k])
   const cellNum = (k) => {
     const v = cells[k]
@@ -534,8 +572,8 @@ function AddStock() {
     const n = Math.floor(Number(v))
     return Number.isFinite(n) && n > 0 ? n : 0
   }
-  const matrixTotal = showMatrix
-    ? effColors.reduce((s, r) => s + effSizes.reduce((t, sz) => t + cellNum(cellKey(r, sz)), 0), 0)
+  const gridTotal = showGrid
+    ? activeCombos.reduce((s, { c, d }) => s + effSizes.reduce((t, sz) => t + cellNum(cellKey(c, d, sz)), 0), 0)
     : Number(f.stock) || 0
 
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
@@ -562,21 +600,38 @@ function AddStock() {
     setBusy(true)
     setMsg(null)
     try {
-      // colour labels encode swatch + which uploaded photo is theirs:
-      // "Name|#hex|imageIndex" — colour photos ride after the main set
-      const cRows = namedColors
+      // photos are appended after the main carousel, in a fixed order:
+      //   [main files] → [colour default photos] → [combo photos]
+      // each colour/combo remembers the index of its own uploaded shot
       let nextIdx = files.length
-      const labelOf = new Map()
-      cRows.forEach((r) => labelOf.set(r, `${r.name.trim()}|${r.hex || ''}|${r.file ? nextIdx++ : ''}`))
-      const allFiles = [...files, ...cRows.filter((r) => r.file).map((r) => r.file)]
-      // every colour × size combo becomes its own variant row carrying
-      // its own stock — the grid the ledger and storefront read from
-      const combos = showMatrix
-        ? effColors.flatMap((r) =>
+      const colorImg = new Map()
+      const colorFiles = []
+      namedColors.forEach((r) => {
+        if (r.file) { colorImg.set(r, nextIdx++); colorFiles.push(r.file) }
+        else colorImg.set(r, '')
+      })
+      const comboImg = new Map() // comboKey → image index
+      const comboFiles = []
+      activeCombos.forEach(({ c, d }) => {
+        const file = comboPhotos[comboKey(c, d)]
+        if (file) { comboImg.set(comboKey(c, d), nextIdx++); comboFiles.push(file) }
+      })
+      const allFiles = [...files, ...colorFiles, ...comboFiles]
+      // encode a full variant line as
+      //   combo:ColourName|#hex|imgIdx|DesignLabel   (+ size in its own col)
+      // imgIdx points at the combo's own photo, else its colour default, else ''
+      const comboColor = (c, d) => {
+        const img = comboImg.has(comboKey(c, d)) ? comboImg.get(comboKey(c, d)) : c ? colorImg.get(c) : ''
+        const cs = c ? `${c.name.trim()}|${c.hex || ''}|${img}` : `||${img || ''}`
+        return `combo:${cs}|${d || ''}`
+      }
+      // every active colour×design×size combo becomes its own stock row
+      const combos = showGrid
+        ? activeCombos.flatMap(({ c, d }) =>
             effSizes.map((sz) => ({
-              color: r ? `color:${labelOf.get(r)}` : null,
+              color: comboColor(c, d),
               size: sz || null,
-              stock: cellNum(cellKey(r, sz)),
+              stock: cellNum(cellKey(c, d, sz)),
             }))
           )
         : null
@@ -588,19 +643,22 @@ function AddStock() {
           category: f.category || null,
           price: Number(f.price) || 0,
           sale_price: f.sale_price ? Number(f.sale_price) : null,
-          stock: matrixTotal, // product total = sum of the variant grid
+          stock: gridTotal, // product total = sum of the variant grid
           description: f.description || null,
           ai_info: f.ai_info || null,
           caption: f.caption || null,
         },
         allFiles,
-        f.variants.split(','),
+        [], // designs now ride inside the combos
         combos
       )
       setMsg({ ok: true, text: `“${f.title}” added to the ${f.album_id} capsule.` })
       setF({ ...EMPTY, album_id: f.album_id })
       setFiles([])
       setColorRows([])
+      setDesignRows([])
+      setExcluded({})
+      setComboPhotos({})
       setCells({})
       if (fileRef.current) fileRef.current.value = ''
     } catch (ex) {
@@ -639,6 +697,7 @@ function AddStock() {
           ))}
         </div>
       </div>
+      <div className="adm-sect-head full"><span>1</span> THE BASICS</div>
       <div className="adm-field full"><label>TITLE</label><input required value={f.title} onChange={set('title')} placeholder="Runaway Varsity" /></div>
       <div className="adm-field"><label>CAPSULE / ALBUM</label>
         <select value={f.album_id} onChange={set('album_id')}>
@@ -652,9 +711,9 @@ function AddStock() {
       </div>
       <div className="adm-field"><label>PRICE (NPR)</label><input required type="number" min="0" value={f.price} onChange={set('price')} /></div>
       <div className="adm-field"><label>SALE PRICE (optional)</label><input type="number" min="0" value={f.sale_price} onChange={set('sale_price')} /></div>
-      <div className="adm-field"><label>{showMatrix ? 'STOCK (auto — from the grid below)' : 'STOCK COUNT'}</label>
-        {showMatrix
-          ? <input value={matrixTotal} readOnly style={{ opacity: 0.65 }} />
+      <div className="adm-field"><label>{showGrid ? 'STOCK (auto — from the grid)' : 'STOCK COUNT'}</label>
+        {showGrid
+          ? <input value={gridTotal} readOnly style={{ opacity: 0.65 }} />
           : <input type="number" min="0" value={f.stock} onChange={set('stock')} />}
       </div>
       <div className="adm-field"><label>CATEGORY</label>
@@ -669,12 +728,39 @@ function AddStock() {
       </div>
       <div className="adm-field full"><label>DESCRIPTION</label><textarea value={f.description} onChange={set('description')} placeholder="Fabric, fit, occasion, garment details." /></div>
       <div className="adm-field full"><label>CAPTION (shown under the piece)</label><input value={f.caption} onChange={set('caption')} placeholder="Numbered like a pressing." /></div>
-      <div className="adm-field full">
-        <label>DESIGN VARIANTS (comma-separated — e.g. Runaway print, Ballerina print, Phoenix back-print)</label>
-        <input value={f.variants} onChange={set('variants')} placeholder="Leave empty for a single design" />
+
+      <div className="adm-sect-head full"><span>2</span> DESIGNS
+        <em>e.g. Blue silhouette, Black silhouette — tick “also flipped” for a mirrored front↔back version</em>
       </div>
       <div className="adm-field full">
-        <label>COLOUR VARIANTS — pick a colour from the wheel, name it, add its photo</label>
+        {designRows.map((d, i) => (
+          <div className="adm-design-row" key={i}>
+            <input
+              className="adm-design-name"
+              value={d.name}
+              onChange={(e) => setDesignRow(i, { name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+              placeholder={`Design ${i + 1} name (e.g. Blue silhouette)`}
+            />
+            <label className="adm-flip-toggle" title="Also comes mirrored (front↔back swapped)">
+              <input type="checkbox" checked={d.flipped} onChange={(e) => setDesignRow(i, { flipped: e.target.checked })} />
+              <span>⇄ also flipped</span>
+            </label>
+            <button type="button" className="adm-chip-btn danger" onClick={() => removeDesignRow(i)}>× Remove</button>
+          </div>
+        ))}
+        <div className="adm-chip-presets">
+          <button type="button" className="adm-chip-btn accent" onClick={addDesignRow}>＋ Add design</button>
+          {designLabels.length > 0 && (
+            <span>{designLabels.length} design{designLabels.length === 1 ? '' : 's'}: {designLabels.join(' · ')}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="adm-sect-head full"><span>3</span> COLOURS
+        <em>pick from the wheel, name it, add that colour’s own photo</em>
+      </div>
+      <div className="adm-field full">
         {colorRows.map((r, i) => (
           <div className="adm-color-card" key={i}>
             <div className="adm-color-top">
@@ -720,8 +806,10 @@ function AddStock() {
           <button type="button" onClick={() => addColorRows(COLOR_PRESETS.earth)}>Earth 5</button>
         </div>
       </div>
+      <div className="adm-sect-head full"><span>4</span> SIZES
+        <em>letters or numbers — leave empty for one-size</em>
+      </div>
       <div className="adm-field full">
-        <label>SIZES (letters or numbers — leave empty for one-size)</label>
         {f.sizes.length > 0 && (
           <div className="adm-chips">
             {f.sizes.map((sz) => (
@@ -748,55 +836,98 @@ function AddStock() {
         </div>
         <div className="adm-chip-presets">
           <span>Quick add:</span>
+          <button type="button" onClick={() => addSizes(SIZE_PRESETS.fit)}>Fit · Cropped/Regular/Oversize</button>
           <button type="button" onClick={() => addSizes(SIZE_PRESETS.alpha)}>Alphabetical · XS–XXL</button>
           <button type="button" onClick={() => addSizes(SIZE_PRESETS.numeric)}>Numerical · 28–40</button>
           <button type="button" onClick={() => addSizes('Free')}>Free size</button>
         </div>
       </div>
 
-      {showMatrix && (
-        <div className="adm-field full">
-          <label>STOCK PER VARIANT · <b>total {matrixTotal}</b> — each colour × size combo holds its own count</label>
-          <div className="adm-matrix-wrap">
-            <table className="adm-matrix">
-              <thead>
-                <tr>
-                  <th>{namedColors.length ? 'COLOUR ⟍ SIZE' : ''}</th>
-                  {effSizes.map((sz) => <th key={sz || 'one'}>{sz || 'ONE-SIZE'}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {effColors.map((r, ri) => (
-                  <tr key={ri}>
-                    <th>
-                      {r ? (<><i className="adm-dot" style={{ background: r.hex || '#888' }} />{r.name}</>) : 'ALL'}
-                    </th>
-                    {effSizes.map((sz) => {
-                      const k = cellKey(r, sz)
-                      return (
-                        <td key={k}>
-                          <input
-                            type="number"
-                            min="0"
-                            value={cellShown(k)}
-                            className={cellNum(k) === 0 ? 'out' : ''}
-                            onChange={(e) => setCells((c) => ({ ...c, [k]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                          />
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {showGrid && (
+        <>
+          <div className="adm-sect-head full"><span>5</span> STOCK GRID
+            <em>every colour × design combo · switch off the ones that don’t exist · set the count per size</em>
           </div>
-          <p className="adm-note" style={{ marginTop: 6 }}>Set a cell to 0 to mark that combo sold out — shoppers see it greyed.</p>
-        </div>
+          <div className="adm-field full">
+            <div className="adm-grid-bar">
+              <span><b>{activeCombos.length}</b> active combo{activeCombos.length === 1 ? '' : 's'} · <b>{gridTotal}</b> units total</span>
+            </div>
+            <div className="adm-matrix-wrap">
+              <table className="adm-matrix combos">
+                <thead>
+                  <tr>
+                    <th className="cmb-head">COMBO</th>
+                    <th className="cmb-photo-h">PHOTO</th>
+                    {effSizes.map((sz) => <th key={sz || 'one'}>{sz || 'ONE-SIZE'}</th>)}
+                    <th className="cmb-total">Σ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {effColors.flatMap((c, ci) =>
+                    effDesigns.map((d, di) => {
+                      const off = isExcluded(c, d)
+                      const rowTotal = effSizes.reduce((t, sz) => t + cellNum(cellKey(c, d, sz)), 0)
+                      const photo = comboPhotos[comboKey(c, d)]
+                      return (
+                        <tr key={`${ci}-${di}`} className={off ? 'is-off' : ''}>
+                          <th className="cmb-head">
+                            <button
+                              type="button"
+                              className={`cmb-toggle ${off ? '' : 'on'}`}
+                              title={off ? 'This combo does not exist — click to include' : 'Click to exclude this combo'}
+                              onClick={() => toggleCombo(c, d)}
+                            >
+                              {off ? '＋' : '✓'}
+                            </button>
+                            {c && <i className="adm-dot" style={{ background: c.hex || '#888' }} />}
+                            <span className="cmb-name">{c ? c.name : 'Any colour'}</span>
+                            {d && <span className="cmb-design">{d}</span>}
+                          </th>
+                          <td className="cmb-photo">
+                            <label className="cmb-photo-slot" title="Photo of this exact combo (optional — falls back to the colour photo)">
+                              <input type="file" accept="image/*" hidden disabled={off} onChange={(e) => setComboPhoto(c, d, e.target.files[0] || null)} />
+                              {photo
+                                ? <img src={URL.createObjectURL(photo)} alt="" />
+                                : <span>{off ? '—' : '＋'}</span>}
+                            </label>
+                            {photo && !off && (
+                              <button type="button" className="cmb-photo-x" onClick={() => setComboPhoto(c, d, null)} aria-label="Remove combo photo">×</button>
+                            )}
+                          </td>
+                          {effSizes.map((sz) => {
+                            const k = cellKey(c, d, sz)
+                            return (
+                              <td key={k}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  disabled={off}
+                                  value={off ? '' : cellShown(k)}
+                                  className={!off && cellNum(k) === 0 ? 'out' : ''}
+                                  onChange={(e) => setCells((cs) => ({ ...cs, [k]: e.target.value }))}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                                />
+                              </td>
+                            )
+                          })}
+                          <td className="cmb-total">{off ? '—' : rowTotal}</td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="adm-note" style={{ marginTop: 6 }}>
+              ✓ = this combo exists · ＋ = switched off (won’t be created) · set a size to 0 to show it sold-out.
+            </p>
+          </div>
+        </>
       )}
 
+      <div className="adm-sect-head full"><span>6</span> PHOTOS &amp; EXTRAS</div>
       <p className="adm-note full" style={{ marginTop: -4 }}>
-        The PHOTOS field below is the main carousel — <b>first = cover, then one per design in order</b>.
+        The PHOTOS field is the main carousel — <b>first = cover, then one per design in order</b>.
         Each colour&apos;s own photo (from its row above) is appended automatically and the storefront
         jumps to it when that swatch is selected.
       </p>
@@ -827,18 +958,33 @@ function AddStock() {
 // design label, size — whatever the row carries
 const parseVariant = (v) => {
   const c = v.color || ''
+  if (c.startsWith('combo:')) {
+    const parts = c.slice('combo:'.length).split('|')
+    const design = parts.slice(3).join('|').trim()
+    return {
+      kind: 'combo',
+      name: (parts[0] || '').trim(),
+      hex: (parts[1] || '').trim() || null,
+      design: design || null,
+      size: v.size || null,
+    }
+  }
   const body = c.replace(/^(design|color):/, '')
   const [nm, hex] = body.split('|')
   return {
     kind: c.startsWith('design:') ? 'design' : c ? 'colour' : 'size',
     name: (nm || '').trim(),
     hex: (hex || '').trim() || null,
+    design: null,
     size: v.size || null,
   }
 }
 
-// stock units live on colour/size rows; design rows are just labels
-const isStockRow = (v) => !(v.color || '').startsWith('design:') && ((v.color || '').startsWith('color:') || v.size)
+// stock units live on colour/combo/size rows; bare design rows are labels
+const isStockRow = (v) => {
+  const c = v.color || ''
+  return c.startsWith('combo:') || c.startsWith('color:') || (!c.startsWith('design:') && !!v.size)
+}
 
 function VariantPanel({ p, onChanged }) {
   const rows = (p.product_variants || []).filter(isStockRow)
@@ -874,7 +1020,7 @@ function VariantPanel({ p, onChanged }) {
           <div className={`adm-var-chip ${n === 0 ? 'out' : n <= 2 ? 'low' : ''}`} key={v.id}>
             <span className="adm-var-label">
               {info.hex && <i className="adm-dot" style={{ background: info.hex }} />}
-              {info.name || 'ALL'}{info.size ? ` · ${info.size}` : ''}
+              {info.name || 'ALL'}{info.design ? ` · ${info.design}` : ''}{info.size ? ` · ${info.size}` : ''}
             </span>
             <span className="adm-step">
               <button type="button" onClick={() => bump(v.id, -1)} aria-label="minus">−</button>
@@ -929,7 +1075,7 @@ function Ledger() {
     const csv = ['title,capsule,category,price,sale_price,stock,status,variants']
       .concat(products.map((p) => [
         p.title, p.album_id, p.category || '', p.price, p.sale_price ?? '', p.stock, p.status,
-        (p.product_variants || []).map((v) => { const i = parseVariant(v); return `${i.name}${i.size ? '/' + i.size : ''}:${v.stock ?? 0}` }).join(' | '),
+        (p.product_variants || []).map((v) => { const i = parseVariant(v); return `${i.name}${i.design ? '/' + i.design : ''}${i.size ? '/' + i.size : ''}:${v.stock ?? 0}` }).join(' | '),
       ].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')))
       .join('\n')
     const a = document.createElement('a')

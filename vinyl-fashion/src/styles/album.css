@@ -878,6 +878,12 @@
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  overscroll-behavior: contain; /* reaching the end never scrolls the page behind */
+}
+
+/* body carries this while a quick-view is open — the sheet owns scroll */
+body.qv-lock {
+  overflow: hidden;
 }
 
 .qv-kicker {

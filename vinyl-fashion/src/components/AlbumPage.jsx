@@ -62,14 +62,19 @@ export default function AlbumPage({ album, revealOrigin, direct = false, closing
     return () => window.removeEventListener('keydown', onKey)
   }, [closing, onClose])
 
-  // the record names the tab while it's open (and any shared link)
+  // the record names the tab while it's open (and any shared link),
+  // and tints the mobile browser chrome to its own palette
   useEffect(() => {
     const prev = document.title
     document.title = `${album.title.toUpperCase()} · ${album.artist} — VINYL FASHION`
+    const meta = document.querySelector('meta[name="theme-color"]')
+    const prevColor = meta?.getAttribute('content')
+    if (meta && album.palette?.bg0) meta.setAttribute('content', album.palette.bg0)
     return () => {
       document.title = prev
+      if (meta && prevColor) meta.setAttribute('content', prevColor)
     }
-  }, [album.title, album.artist])
+  }, [album.title, album.artist, album.palette?.bg0])
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0)

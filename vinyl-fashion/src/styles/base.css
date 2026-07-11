@@ -836,6 +836,43 @@ html.has-custom-cursor * {
   .soon-peek { animation: none; }
 }
 
+/* ── Global feel ────────────────────────────────────────────── */
+
+/* selecting text picks up the record's accent */
+::selection {
+  background: var(--accent);
+  color: var(--bg0);
+}
+
+/* controls respond instantly on touch — no double-tap-zoom wait */
+button,
+a,
+input,
+select,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* thin, dark scrollbars that sit quietly in the sleeve aesthetic */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* ── Crash / error boundary ─────────────────────────────────── */
 
 .crash {

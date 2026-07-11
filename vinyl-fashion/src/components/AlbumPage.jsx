@@ -119,7 +119,12 @@ export default function AlbumPage({ album, revealOrigin, closing, onClose, onClo
   }, [])
 
   const titleLines = album.displayTitle.split('\n')
-  const songName = (thisAlbumLoaded ? nowPlaying.track.name : featured?.name || album.featured)
+  // the admin-set name wins (covers a custom/uploaded song that isn't in
+  // the iTunes track list); otherwise fall back to the resolved track
+  const songName =
+    (album.featured || '').trim() ||
+    (thisAlbumLoaded ? nowPlaying?.track?.name : featured?.name) ||
+    album.title
   const staged = !revealOrigin && !closing
 
   return (

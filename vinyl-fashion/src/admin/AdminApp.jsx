@@ -1697,15 +1697,22 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
           {/* featured song + clip */}
           {section === 'SOUND' && (
             <>
-          <div className="adm-field full"><label>FEATURED SONG</label>
-            {tracks.length ? (
-              <select value={edit.featured} onChange={(e) => set('featured', e.target.value)}>
-                {!tracks.some((t) => t.name === edit.featured) && <option value={edit.featured}>{edit.featured || '— pick —'}</option>}
+          <div className="adm-field full"><label>FEATURED SONG — the name shown on “DROP THE NEEDLE”</label>
+            {tracks.length > 0 && (
+              <select
+                value={tracks.some((t) => t.name === edit.featured) ? edit.featured : ''}
+                onChange={(e) => e.target.value && set('featured', e.target.value)}
+                style={{ marginBottom: 6 }}
+              >
+                <option value="">— quick-pick a track —</option>
                 {tracks.map((t) => <option key={t.id} value={t.name}>{t.num}. {t.name}</option>)}
               </select>
-            ) : (
-              <input value={edit.featured} onChange={(e) => set('featured', e.target.value)} placeholder="song name" />
             )}
+            <input
+              value={edit.featured}
+              onChange={(e) => set('featured', e.target.value)}
+              placeholder="or type any name — e.g. the title of your uploaded song"
+            />
           </div>
           <ClipEditor album={a} edit={edit} set={set} />
             </>

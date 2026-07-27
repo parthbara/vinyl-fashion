@@ -19,13 +19,31 @@ export default function CapsuleGrid({ album }) {
   const items = live ? products : album.capsule
   const notes = album.notes ?? []
   const [view, setView] = useState(null) // item in the quick-view
+  // a pre-order takes reservations, so on-hand stock doesn't gate it —
+  // nothing here reads SOLD OUT while the capsule is in pre-order
+  const pre = !!album.preorder
 
   const openView = (item) => {
     sfx.pop()
     setView(item)
   }
 
+  // A liner note used to be spliced in straight after its `after` index,
+  // which shoved the next garment onto its own line — with three pieces
+  // and a note after the second, the third fell to a lonely row two.
+  // Notes now wait for the end of a row and take a full row of their
+  // own, so the garments always sit together. Must mirror the grid
+  // breakpoints in album.css.
+  const calcCols = () => (window.innerWidth <= 700 ? 1 : window.innerWidth <= 1100 ? 2 : 3)
+  const [cols, setCols] = useState(calcCols)
+  useEffect(() => {
+    const onR = () => setCols(calcCols())
+    window.addEventListener('resize', onR)
+    return () => window.removeEventListener('resize', onR)
+  }, [])
+
   const cells = []
+  const waiting = [] // notes held back until the current row closes
   items.forEach((item, i) => {
     cells.push(
       <article
@@ -50,7 +68,8 @@ export default function CapsuleGrid({ album }) {
           ) : (
             <GarmentSvg type={item.type} />
           )}
-          {live && item.soldOut && <span className="garment-flag">SOLD OUT</span>}
+          {live && item.soldOut && !pre && <span className="garment-flag">SOLD OUT</span>}
+          {live && pre && <span className="garment-flag is-pre">◆ {album.preorderText}</span>}
         </div>
         <h4 className="garment-name">{item.name}</h4>
         {live ? (
@@ -66,23 +85,27 @@ export default function CapsuleGrid({ album }) {
                 '—'
               )}
             </span>
-            <span className="garment-order">{item.soldOut ? 'DETAILS' : 'ORDER'}</span>
+            <span className="garment-order">
+              {pre ? 'PRE-ORDER' : item.soldOut ? 'DETAILS' : 'ORDER'}
+            </span>
           </div>
         ) : (
           <p className="garment-price">{loading ? '· · ·' : '— COMING SOON —'}</p>
         )}
       </article>
     )
-    notes
-      .filter((n) => n.after === i)
-      .forEach((n, j) => {
+    notes.filter((n) => n.after === i).forEach((n) => waiting.push({ n, i }))
+    // flush at the end of a shelf row, or once the last piece is placed
+    if (waiting.length && ((i + 1) % cols === 0 || i === items.length - 1)) {
+      waiting.splice(0).forEach(({ n, i: from }, j) => {
         cells.push(
-          <aside className="liner-note" key={`note-${i}-${j}`}>
+          <aside className="liner-note" key={`note-${from}-${j}`}>
             <span className="liner-note-kicker">{n.kicker}</span>
             <p className="liner-note-text">{n.text}</p>
           </aside>
         )
       })
+    }
   })
 
   return (
@@ -98,25 +121,27 @@ export default function CapsuleGrid({ album }) {
           {loading
             ? 'PULLING FROM THE RACKS…'
             : live
-              ? `${items.length} PIECE${items.length === 1 ? '' : 'S'} · CUT TO ${album.title.toUpperCase()}`
+              ? `${items.length} PIECE${items.length === 1 ? '' : 'S'} · CUT TO ${album.title.toUpperCase()}${pre ? ` · ${album.preorderText} · ${album.preorderNote}` : ''}`
               : `SIX PIECES IN DEVELOPMENT · CUT TO ${album.title.toUpperCase()} · DROP DATE TBA`}
         </p>
       </header>
       <div className="capsule-grid">{cells}</div>
-      {view && <QuickView album={album} item={view} live={live} onClose={() => setView(null)} />}
+      {view && <QuickView album={album} item={view} live={live} pre={pre} onClose={() => setView(null)} />}
     </section>
   )
 }
 
 // ── quick-view ───────────────────────────────────────────────────
-function QuickView({ album, item, live, onClose }) {
+function QuickView({ album, item, live, pre, onClose }) {
   const [size, setSize] = useState(null)
   const [design, setDesign] = useState(null)
   const [color, setColor] = useState(null)
   const [idx, setIdx] = useState(0)
   const [nudge, setNudge] = useState(null) // 'size' | 'color' | 'design' — shake the skipped row
 
-  const purchasable = live && item.price && !item.soldOut
+  // a pre-order sells what isn't on the shelf yet, so being out of stock
+  // doesn't close the sale — only a missing price does
+  const purchasable = live && item.price && (pre || !item.soldOut)
   const designs = item.designs || []
   const colors = item.colors || []
   // only REAL sizes — never invent S/M/L that don't exist in stock
@@ -142,15 +167,23 @@ function QuickView({ album, item, live, onClose }) {
   // unavailable. Legacy products (no colour×design rows) stay sparse:
   // unknown combos remain available.
   const hasCombos = vrows.some((r) => r.color && r.design)
-  const isOut = (filter) => {
+  // Three different states, and they must not be confused:
+  //   'ok'   — orderable
+  //   'out'  — a real line that sold through (SOLD OUT is honest here)
+  //   'gone' — no such line at all: the pairing was switched off in the
+  //            studio because it doesn't look right, so it was never
+  //            made. Calling that "sold out" invents a stock story about
+  //            a garment that has never existed.
+  const availability = (filter) => {
     const { stock, matched } = stockFor(filter)
-    if (matched) return stock <= 0
-    return hasCombos && (filter.color != null || filter.design != null)
+    if (matched) return pre || stock > 0 ? 'ok' : 'out'
+    return hasCombos && (filter.color != null || filter.design != null) ? 'gone' : 'ok'
   }
+  const blocked = (filter) => availability(filter) !== 'ok'
   // each axis respects what's already picked on the others
-  const colorOut = (cName) => isOut({ color: cName, design })
-  const designOut = (dLabel) => isOut({ color, design: dLabel })
-  const sizeOut = (sz) => isOut({ color, design, size: sz })
+  const colorState = (cName) => availability({ color: cName, design })
+  const designState = (dLabel) => availability({ color, design: dLabel })
+  const sizeState = (sz) => availability({ color, design, size: sz })
   // the photo index for a variant, as specific as the pick allows:
   // exact colour×design×size → colour×design → colour
   const comboImg = (cName, dLabel, sz = null) => {
@@ -197,7 +230,9 @@ function QuickView({ album, item, live, onClose }) {
   const spec = `${design ? ` · ${design}` : ''}${color ? ` · ${color}` : ''}${size ? ` · size ${size}` : ''}`
   const capsuleLink = `${window.location.origin}${window.location.pathname}#${album.id}`
   const message = purchasable
-    ? `Hi ${BRAND.name}! I'd like to order the ${item.name} from the ${album.title} capsule${spec} — ${npr(price)}. (${capsuleLink})`
+    ? pre
+      ? `Hi ${BRAND.name}! I'd like to PRE-ORDER the ${item.name} from the ${album.title} capsule${spec} — ${npr(price)}. (${capsuleLink})`
+      : `Hi ${BRAND.name}! I'd like to order the ${item.name} from the ${album.title} capsule${spec} — ${npr(price)}. (${capsuleLink})`
     : item.soldOut
       ? `Hi ${BRAND.name}! Is the ${item.name} (${album.title} capsule) getting a restock?`
       : `Hi ${BRAND.name}! Put me on the list for the ${item.name} from the ${album.title} capsule.`
@@ -217,7 +252,9 @@ function QuickView({ album, item, live, onClose }) {
 
   // stock for the current selection (as specific as they've picked)
   const remaining = (() => {
-    if (!purchasable) return null
+    // no scarcity line on a pre-order — the count is a production plan,
+    // not shelf stock, and "ONLY 3 LEFT" would be a lie
+    if (!purchasable || pre) return null
     const { stock, matched } = stockFor({ color, design, size })
     return matched ? stock : item.stock ?? null
   })()
@@ -284,6 +321,9 @@ function QuickView({ album, item, live, onClose }) {
               'IN DEVELOPMENT · DROP DATE TBA'
             )}
           </p>
+          {purchasable && pre && (
+            <p className="qv-pre">◆ {album.preorderText} · {album.preorderNote}</p>
+          )}
           {purchasable && remaining != null && remaining > 0 && remaining <= 3 && (
             <p className="qv-left">⚡ ONLY {remaining} LEFT{size || color || design ? ' IN THIS PICK' : ''}</p>
           )}
@@ -295,12 +335,12 @@ function QuickView({ album, item, live, onClose }) {
               <p className="qv-pick-label">DESIGN</p>
               <div className={`qv-sizes ${nudge === 'design' ? 'nudge' : ''}`} role="group" aria-label="Design">
                 {designs.map((d, di) => {
-                  const out = designOut(d)
+                  const st = designState(d)
                   return (
                     <button
                       key={d}
-                      className={`qv-size wide ${design === d ? 'on' : ''} ${out ? 'out' : ''}`}
-                      disabled={out}
+                      className={`qv-size wide ${design === d ? 'on' : ''} ${st === 'out' ? 'out' : ''} ${st === 'gone' ? 'gone' : ''}`}
+                      disabled={st !== 'ok'}
                       onClick={() => {
                         sfx.tick()
                         const on = design === d
@@ -310,7 +350,7 @@ function QuickView({ album, item, live, onClose }) {
                       }}
                     >
                       {d}
-                      {out && <span className="qv-out-tag">SOLD OUT</span>}
+                      {st === 'out' && <span className="qv-out-tag">SOLD OUT</span>}
                     </button>
                   )
                 })}
@@ -322,12 +362,12 @@ function QuickView({ album, item, live, onClose }) {
               <p className="qv-pick-label">COLOUR</p>
               <div className={`qv-sizes ${nudge === 'color' ? 'nudge' : ''}`} role="group" aria-label="Colour">
                 {colors.map((c, ci) => {
-                  const out = colorOut(c.name)
+                  const st = colorState(c.name)
                   return (
                     <button
                       key={c.name}
-                      className={`qv-size wide ${color === c.name ? 'on' : ''} ${out ? 'out' : ''}`}
-                      disabled={out}
+                      className={`qv-size wide ${color === c.name ? 'on' : ''} ${st === 'out' ? 'out' : ''} ${st === 'gone' ? 'gone' : ''}`}
+                      disabled={st !== 'ok'}
                       onClick={() => {
                         sfx.tick()
                         const on = color === c.name
@@ -335,9 +375,9 @@ function QuickView({ album, item, live, onClose }) {
                         setColor(nextColor)
                         // picking a colour drops a design/size dead under it
                         if (!on) {
-                          const keepDesign = design && !isOut({ color: nextColor, design })
+                          const keepDesign = design && !blocked({ color: nextColor, design })
                           if (design && !keepDesign) setDesign(null)
-                          if (size && isOut({ color: nextColor, design, size })) setSize(null)
+                          if (size && blocked({ color: nextColor, design, size })) setSize(null)
                           // the exact combo photo if a design's held, else the
                           // colour's own photo, else the old order guess
                           jump(comboImg(nextColor, keepDesign ? design : null) ?? c.imgIdx ?? designs.length + ci)
@@ -346,7 +386,7 @@ function QuickView({ album, item, live, onClose }) {
                     >
                       {c.hex && <i className="qv-swatch" style={{ background: c.hex }} aria-hidden="true" />}
                       {c.name}
-                      {out && <span className="qv-out-tag">SOLD OUT</span>}
+                      {st === 'out' && <span className="qv-out-tag">SOLD OUT</span>}
                     </button>
                   )
                 })}
@@ -358,12 +398,12 @@ function QuickView({ album, item, live, onClose }) {
               <p className="qv-pick-label">SIZE</p>
               <div className={`qv-sizes ${nudge === 'size' ? 'nudge' : ''}`} role="group" aria-label="Size">
                 {sizes.map((s) => {
-                  const out = sizeOut(s)
+                  const st = sizeState(s)
                   return (
                     <button
                       key={s}
-                      className={`qv-size ${size === s ? 'on' : ''} ${out ? 'out' : ''}`}
-                      disabled={out}
+                      className={`qv-size ${size === s ? 'on' : ''} ${st === 'out' ? 'out' : ''} ${st === 'gone' ? 'gone' : ''}`}
+                      disabled={st !== 'ok'}
                       onClick={() => {
                         sfx.tick()
                         const on = size === s
@@ -396,11 +436,14 @@ function QuickView({ album, item, live, onClose }) {
               ? needColor ? 'PICK A COLOUR FIRST'
                 : needDesign ? 'PICK A DESIGN FIRST'
                 : needSize ? 'PICK A SIZE FIRST'
+                : pre ? 'PRE-ORDER ON WHATSAPP'
                 : 'ORDER ON WHATSAPP'
               : item.soldOut ? 'ASK FOR A RESTOCK' : 'GET NOTIFIED ON WHATSAPP'}
           </a>
           <p className="qv-note">
-            NO ONLINE PAYMENT — EVERY ORDER IS CONFIRMED PERSONALLY ON WHATSAPP.
+            {pre
+              ? `PRE-ORDER · ${album.preorderNote} — NO ONLINE PAYMENT. WE CONFIRM YOUR PIECE AND THE DROP ON WHATSAPP.`
+              : 'NO ONLINE PAYMENT — EVERY ORDER IS CONFIRMED PERSONALLY ON WHATSAPP.'}
           </p>
         </div>
       </div>

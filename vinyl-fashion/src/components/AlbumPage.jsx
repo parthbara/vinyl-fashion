@@ -201,6 +201,12 @@ export default function AlbumPage({ album, revealOrigin, direct = false, closing
           <p className="hero-story" data-reveal>
             {album.story}
           </p>
+          {album.preorder && (
+            <p className="hero-pre" data-reveal>
+              <b>◆ {album.preorderText}</b>
+              <span>{album.preorderNote}</span>
+            </p>
+          )}
           <div className="hero-actions" data-reveal>
             <button
               className={`now-chip ${playingThis ? 'live' : ''}`}
@@ -271,6 +277,11 @@ export default function AlbumPage({ album, revealOrigin, direct = false, closing
           </div>
           <div className="foot-col">
             <span className="foot-k">THE FINE PRINT</span>
+            {album.preorder && (
+              <span className="foot-line dim">
+                {album.preorderText} · {album.preorderNote}
+              </span>
+            )}
             <span className="foot-line dim">LIMITED PRESSINGS · MADE TO ORDER</span>
             <span className="foot-line dim">DELIVERY ACROSS NEPAL · NPR PRICING</span>
             <span className="foot-line dim">ORDERS CONFIRMED PERSONALLY ON WHATSAPP</span>

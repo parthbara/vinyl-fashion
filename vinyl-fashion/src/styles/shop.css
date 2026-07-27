@@ -818,10 +818,36 @@
   cursor: default;
 }
 
+/* pre-order: a small pressed corner tag. Deliberately NOT the
+   full-cover stamp the Coming-Soon wall uses — this is the record we
+   want people to actually look at, so the artwork stays uncovered. */
+.pre-tag {
+  position: absolute;
+  z-index: 6;
+  top: 7px;
+  left: 7px;
+  padding: 4px 8px 3px;
+  font-family: var(--font-mono);
+  font-size: clamp(6.5px, 0.72vw, 8px);
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  border-radius: 3px;
+  color: #0b0908;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 96%, #fff), var(--accent));
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 40%, transparent);
+  white-space: nowrap;
+}
+
 .meta-soon {
   font-style: normal;
   color: var(--accent);
   opacity: 0.9;
+}
+
+.meta-pre {
+  font-style: normal;
+  color: var(--accent);
+  opacity: 1;
 }
 
 .sleeve-slot.is-ghost {
@@ -953,6 +979,21 @@
   letter-spacing: 0.18em;
   color: #7bd88f;
   opacity: 0.95;
+}
+
+/* pre-order reads in the album's own accent, not the "in stock" green
+   — it's a different promise, so it shouldn't wear the same colour */
+.slot-live.is-pre {
+  color: var(--accent);
+}
+
+.slot-live.is-pre i {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  opacity: 0.68;
 }
 
 /* a filter with nothing filed under it */

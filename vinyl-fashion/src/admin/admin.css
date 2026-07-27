@@ -918,6 +918,143 @@ a.adm-nav-btn {
   align-items: center;
   padding: 8px 6px;
 }
+
+/* ── ledger: full variant editor ────────────────────────────────── */
+.adm-ve-sect {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.adm-ve-k {
+  flex: 0 0 74px;
+  padding-top: 7px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  opacity: 0.5;
+}
+
+.adm-ve-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+.adm-ve-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 8px;
+  font-size: 11px;
+  border: 1px solid rgba(242, 236, 226, 0.16);
+  border-radius: 9px;
+}
+
+.adm-ve-name {
+  width: 116px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(242, 236, 226, 0.14);
+  border-radius: 6px;
+}
+
+.adm-ve-name.wide {
+  width: 190px;
+}
+
+.adm-ve-x {
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+.adm-ve-x:hover {
+  opacity: 1;
+  color: #ee8888;
+}
+
+.adm-ve-gridwrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 6px;
+}
+
+.adm-ve-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.adm-ve-grid th {
+  padding: 6px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-align: left;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+.adm-ve-grid td {
+  padding: 4px 8px;
+  border-top: 1px solid rgba(242, 236, 226, 0.08);
+}
+
+.adm-ve-grid tr.off {
+  opacity: 0.4;
+}
+
+.adm-ve-pair {
+  white-space: nowrap;
+}
+
+.adm-ve-grid input {
+  width: 62px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(242, 236, 226, 0.14);
+  border-radius: 6px;
+}
+
+.adm-ve-offcell {
+  opacity: 0.4;
+}
+
+.adm-ve-toggle {
+  padding: 3px 9px;
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: #9be0ad;
+  background: rgba(123, 216, 143, 0.12);
+  border: 1px solid rgba(123, 216, 143, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.adm-ve-toggle.off {
+  color: #e7c99a;
+  background: rgba(216, 165, 72, 0.12);
+  border-color: rgba(216, 165, 72, 0.45);
+}
+
+.adm-ve-del {
+  color: #ee8888;
+}
 .adm-var-chip {
   display: flex;
   align-items: center;
@@ -1578,6 +1715,19 @@ a.adm-nav-btn {
   font-size: 11.5px;
   opacity: 0.55;
   line-height: 1.6;
+}
+
+/* the piece you're filing won't reach the storefront — say so loudly,
+   this is work quietly thrown away otherwise */
+.adm-warn {
+  font-size: 11.5px;
+  line-height: 1.6;
+  margin-top: 6px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: #ffd9a8;
+  background: rgba(196, 122, 32, 0.14);
+  border: 1px solid rgba(224, 152, 56, 0.42);
 }
 
 /* studio live preview */

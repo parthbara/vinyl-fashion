@@ -29,12 +29,19 @@ function answer(raw, albums) {
     if (album.comingSoon) {
       return `${album.title} (${album.artist}) is on the Coming-Soon wall — the capsule drops with the record. Tap WhatsApp and we'll put you first in line.`
     }
+    if (album.preorder) {
+      return `${album.title} (${album.artist}) is open for pre-order — ${album.preorderNote.toLowerCase()}. Pull the record in the shop, pick your piece, and we'll confirm it on WhatsApp${album.story ? `. ${album.story}` : '.'}`
+    }
     return `The ${album.title} capsule (cut to ${album.artist}) is live — pull the record in the shop to see its pieces${album.story ? `. ${album.story}` : '.'}`
   }
   if (/(track|where.*order|order.*status)/.test(q)) {
     return 'Tap “◷ TRACK AN ORDER” just below — enter your order code (like VF-3F9A2) and the phone you ordered with.'
   }
-  if (/(drop|release|when|available|stock|buy|order)/.test(q)) {
+  if (/(drop|release|when|available|stock|buy|order|pre.?order)/.test(q)) {
+    const pre = albums.filter((a) => a.preorder)
+    if (pre.length) {
+      return `${pre.map((a) => a.title).join(', ')} ${pre.length === 1 ? 'is' : 'are'} open for pre-order right now — ${pre[0].preorderNote.toLowerCase()}. Everything else releases with its record; drop dates go to WhatsApp first.`
+    }
     return 'Each capsule releases with its record. Drop dates are announced to WhatsApp first — message us to get on the list.'
   }
   if (/(size|sizing|fit|measurement)/.test(q)) {
@@ -43,7 +50,10 @@ function answer(raw, albums) {
   if (/(capsule|out|collection|what|catalog|catalogue)/.test(q)) {
     const live = albums.filter((a) => !a.comingSoon)
     const soon = albums.length - live.length
-    return `${live.length} capsule${live.length === 1 ? ' is' : 's are'} live: ${live.map((a) => a.title).join(', ')}${soon > 0 ? ` — plus ${soon} more records on the Coming-Soon wall.` : '.'}`
+    // don't call a capsule "live" when every one of them is a pre-order
+    const allPre = live.length > 0 && live.every((a) => a.preorder)
+    const state = allPre ? 'open for pre-order' : 'live'
+    return `${live.length} capsule${live.length === 1 ? ' is' : 's are'} ${state}: ${live.map((a) => a.title).join(', ')}${soon > 0 ? ` — plus ${soon} more records on the Coming-Soon wall.` : '.'}`
   }
   if (/(hi|hello|hey|yo|namaste)/.test(q)) {
     return 'Hey! Ask me about a capsule, track an order, or tap WhatsApp to talk to the team.'

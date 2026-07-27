@@ -264,6 +264,14 @@ export const ALBUMS = [
         text: 'Frost-white technical layers and diamond-cold blues, built for the coldest room in the building. Brushed silver hardware, sealed seams, zero warmth wasted.',
       },
     ],
+    // The drop the store is currently taking reservations for. Set here
+    // rather than only in the DB so a Supabase outage can't quietly
+    // downgrade it to a normal in-stock sale — the Album Studio toggle
+    // still overrides this either way.
+    effects: {
+      preorder: true,
+      preorderNote: 'SHIPS IN 2–3 WEEKS',
+    },
   },
   {
     id: 'graduation',

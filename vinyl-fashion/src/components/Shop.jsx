@@ -4,6 +4,7 @@ import { BRAND, waLink } from '../config'
 import { useAlbums } from '../lib/useAlbums'
 import { useArtistImage } from '../lib/artistImage'
 import { useCoverPalette } from '../lib/palette'
+import { useEscape } from '../lib/useEscape'
 
 import { warmAlbumArt } from '../lib/preload'
 import baked from '../data/tracks.json'
@@ -66,15 +67,22 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     return () => window.removeEventListener('resize', onR)
   }, [])
 
+  // the openable records, and what to call that shelf: while every one
+  // of them is taking pre-orders "AVAILABLE" oversells it, so the chip
+  // names what's actually on offer
+  const openAlbums = useMemo(() => albums.filter((a) => !a.comingSoon), [albums])
+  const openLabel =
+    openAlbums.length > 0 && openAlbums.every((a) => a.preorder) ? 'PRE-ORDER' : 'AVAILABLE'
+
   // balance the shelves: 6 albums at 5-wide → 3+3, not 5+1; 20 → 5×4
   const wallAlbums = useMemo(
     () =>
       wallFilter === 'live'
-        ? albums.filter((a) => !a.comingSoon)
+        ? openAlbums
         : wallFilter === 'soon'
           ? albums.filter((a) => a.comingSoon)
           : albums,
-    [albums, wallFilter]
+    [albums, openAlbums, wallFilter]
   )
 
   const rows = useMemo(() => {
@@ -154,6 +162,11 @@ export default function Shop({ onOpen, dimmed, openingId }) {
   const tickerItems = useMemo(
     () => [
       BRAND.tagline,
+      // whatever's open for pre-order leads the crawl — it's the only
+      // thing on the wall anyone can act on today
+      ...albums
+        .filter((a) => a.preorder)
+        .map((a) => `◆ ${a.preorderText} OPEN · ${a.title.toUpperCase()} · ${a.preorderNote}`),
       ...albums.map((a) => `${a.artist} — ${a.title}`),
       `${albums.length} CAPSULES · LIMITED PRESSINGS`,
       '33⅓ RPM · STEREO',
@@ -162,14 +175,20 @@ export default function Shop({ onOpen, dimmed, openingId }) {
     [albums]
   )
 
-  // pick from the full results page: close it, then open the record
+  // pick from the full results page: close it, then open the record.
+  // A coming-soon record only raises the teaser, so the results stay
+  // put underneath — dismissing the teaser returns you to your search
+  // instead of dumping you back on the shop floor.
   const pickFromResults = (album) => {
+    if (album.comingSoon) return openFromSearch(album)
     setResults(null)
     openFromSearch(album)
   }
 
   // pick from an artist page: close everything, then open the record
+  // (same rule — a teaser leaves the artist page standing behind it)
   const pickFromArtist = (album) => {
+    if (album.comingSoon) return openFromSearch(album)
     setArtistView(null)
     setResults(null)
     openFromSearch(album)
@@ -240,7 +259,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
         <div className="crate-filters" role="group" aria-label="Filter the wall">
           {[
             ['all', `ALL · ${albums.length}`],
-            ['live', `AVAILABLE · ${albums.filter((a) => !a.comingSoon).length}`],
+            ['live', `${openLabel} · ${openAlbums.length}`],
             ['soon', `COMING SOON · ${albums.filter((a) => a.comingSoon).length}`],
           ].map(([key, label]) => (
             <button
@@ -286,6 +305,9 @@ export default function Shop({ onOpen, dimmed, openingId }) {
             <>
               <b>{hovered.artist}</b> — {hovered.title} · {hovered.year}
               {hovered.comingSoon && <em className="meta-soon"> · {hovered.comingSoonText}</em>}
+              {hovered.preorder && (
+                <em className="meta-pre"> · ◆ {hovered.preorderText} · {hovered.preorderNote}</em>
+              )}
             </>
           ) : (
             <>PULL A RECORD FROM THE CRATE</>
@@ -323,11 +345,7 @@ export default function Shop({ onOpen, dimmed, openingId }) {
 
 // An artist page — every pressing filed under one name.
 function ArtistView({ artist, albums, onPick, onClose }) {
-  useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  useEscape(onClose)
 
   // real artist portrait (Deezer) → album cover fallback, but only once
   // the lookup settles so the cover doesn't flash in first
@@ -368,6 +386,7 @@ function ArtistView({ artist, albums, onPick, onClose }) {
                 <i>
                   {album.year}
                   {album.comingSoon && ' · ◷ SOON'}
+                  {album.preorder && ` · ◆ ${album.preorderText}`}
                 </i>
               </button>
             ))}
@@ -396,11 +415,7 @@ function ArtistChip({ artist, album, onArtist }) {
 // The results page — press Enter in search and land here, Spotify-style:
 // artists, albums and songs grouped, each opening its record.
 function SearchResults({ query, data, onPick, onArtist, onClose }) {
-  useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  useEscape(onClose)
 
   const { albums, artists, songs } = data
   const empty = !albums.length && !artists.length && !songs.length
@@ -432,7 +447,13 @@ function SearchResults({ query, data, onPick, onArtist, onClose }) {
                 <span className="sr-top-text">
                   <b>{top.title}</b>
                   <i>{top.artist}</i>
-                  <em>{top.comingSoon ? `◷ ${top.comingSoonText}` : 'ALBUM'}</em>
+                  <em>
+                    {top.comingSoon
+                      ? `◷ ${top.comingSoonText}`
+                      : top.preorder
+                        ? `◆ ${top.preorderText} · ${top.preorderNote}`
+                        : 'ALBUM'}
+                  </em>
                 </span>
               </button>
             </section>
@@ -465,6 +486,7 @@ function SearchResults({ query, data, onPick, onArtist, onClose }) {
                     <i>
                       {album.artist} · {album.year}
                       {album.comingSoon && ' · ◷ SOON'}
+                      {album.preorder && ` · ◆ ${album.preorderText}`}
                     </i>
                   </button>
                 ))}
@@ -501,11 +523,7 @@ function SearchResults({ query, data, onPick, onArtist, onClose }) {
 // Coming-soon records aren't dead ends — they capture interest. A
 // themed teaser with the cover, the story and a WhatsApp notify line.
 function ComingSoonPeek({ album, onClose }) {
-  useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  useEscape(onClose)
 
   // morph the teaser to the record's own cover colours; until extraction
   // settles, sit on a neutral dark base (never the stored default — that
@@ -577,7 +595,12 @@ function SearchBox({ search, onPick, onSubmit }) {
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false)
+          // only swallow Escape when the dropdown is actually showing,
+          // so it doesn't also dismiss an overlay layered above
+          if (e.key === 'Escape' && open) {
+            e.stopPropagation()
+            setOpen(false)
+          }
           if (e.key === 'Enter' && q.trim().length >= 1) {
             setOpen(false)
             onSubmit(q.trim())
@@ -605,6 +628,7 @@ function SearchBox({ search, onPick, onSubmit }) {
                   </b>
                   {song && <i>♪ {song}</i>}
                   {album.comingSoon && <i>◷ {album.comingSoonText}</i>}
+                  {album.preorder && <i>◆ {album.preorderText}</i>}
                 </span>
                 <span className="hit-no">{album.year}</span>
               </button>

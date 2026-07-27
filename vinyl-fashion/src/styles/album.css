@@ -181,6 +181,34 @@
   margin-top: 12px;
 }
 
+/* states the pre-order once, up in the rail, so it's set before the
+   shopper ever reaches a garment card */
+.hero-pre {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 16px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.hero-pre b {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+}
+
+.hero-pre span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  opacity: 0.72;
+}
+
 .hero-actions {
   display: flex;
   align-items: center;
@@ -436,16 +464,35 @@
   opacity: 0.5;
 }
 
+/* Fixed column counts rather than auto-fill: CapsuleGrid has to know
+   where a row ends to place liner notes, and it can only do that if JS
+   and CSS agree. Keep calcCols() in CapsuleGrid.jsx in step with these
+   breakpoints. */
 .capsule-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 22px;
+}
+
+@media (max-width: 1100px) {
+  .capsule-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .capsule-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 
 /* editorial insert between garments — the album's voice */
 
 .liner-note {
-  grid-column: span 2;
+  /* a full row of its own — a partial span would leave a hole that the
+     next garment slides into, breaking the row it belongs to */
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -580,6 +627,14 @@
   backdrop-filter: blur(4px);
 }
 
+/* the pre-order counterpart of the SOLD OUT flag — same corner, but
+   filled in the album accent so it reads as an invitation, not a wall */
+.garment-flag.is-pre {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 96%, #fff), var(--accent));
+  border-color: transparent;
+  color: #0b0908;
+}
+
 .garment-buy {
   display: flex;
   align-items: center;
@@ -622,7 +677,10 @@
 .qv-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* above the search-results page and the floating dock (both 70) so a
+     teaser raised from search sits on top of it, not behind — but below
+     the cinematic (80), which owns the screen outright */
+  z-index: 75;
   display: grid;
   place-items: center;
   padding: clamp(16px, 4vw, 48px);
@@ -641,7 +699,15 @@
 .qv-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(340px, 640px) 1fr;
+  /* proportional, both sides floored. The old `minmax(340px, 640px) 1fr`
+     let the image column take its full 640px max and left the whole
+     picker panel ~96px wide on a tablet — the shot scales down now and
+     the details never drop below a readable 340px */
+  grid-template-columns: minmax(300px, 1.15fr) minmax(340px, 1fr);
+  /* the row must be capped to the card, not sized to its content —
+     otherwise it grows past max-height and overflow:hidden shears the
+     order button off the bottom instead of letting the body scroll */
+  grid-template-rows: minmax(0, 1fr);
   width: min(1180px, 96vw);
   max-height: min(92vh, 900px);
   overflow: hidden;
@@ -667,6 +733,20 @@
 @keyframes qv-pop {
   from { opacity: 0; transform: translateY(16px) scale(0.96); }
   to { opacity: 1; transform: none; }
+}
+
+/* pre-order band under the price: sets the expectation (what they're
+   buying, when it arrives) before they reach the order button */
+.qv-pre {
+  margin: 6px 0 0;
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 /* scarcity line under the price — conversion nudge, album-accented */
@@ -698,10 +778,18 @@
   filter: saturate(0.7);
 }
 
-/* a colour/size combo the stock grid says is gone */
+/* a real line that sold through — struck out, and it earns a SOLD OUT tag */
 .qv-size.out {
   opacity: 0.38;
   text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+/* a pairing that was never made (switched off in the studio because it
+   didn't look right). It isn't sold out — nothing was ever pressed — so
+   it just recedes: no strike-through, no tag, no stock claim. */
+.qv-size.gone {
+  opacity: 0.26;
   cursor: not-allowed;
 }
 
@@ -767,7 +855,10 @@
 .qv-carousel img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* the whole garment, never a crop — a cover fit was cutting off
+     hems and print edges on tall product shots */
+  object-fit: contain;
+  padding: 12px;
   display: block;
   animation: qv-img-in 0.3s ease;
 }
@@ -878,6 +969,11 @@
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  /* a grid item's automatic minimum size is its content, so without
+     this the panel never shrinks below a tall picker stack — the
+     scroll never engages and the card's overflow:hidden clips the
+     order button clean off the bottom */
+  min-height: 0;
   overscroll-behavior: contain; /* reaching the end never scrolls the page behind */
 }
 
@@ -983,6 +1079,11 @@ body.qv-lock {
   text-align: center;
   margin-top: 10px;
   padding: 19px;
+  /* stays on screen while the picker stack scrolls behind it — mobile
+     already did this; desktop buried it below the fold on tall combos */
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   border-radius: 999px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white 12%), var(--accent));
   color: var(--bg0);
@@ -1349,6 +1450,11 @@ a.foot-line:hover {
   .hero-actions {
     grid-column: 1 / -1;
     margin-top: 12px;
+  }
+  .hero-pre {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+    padding: 8px 12px;
   }
   .liner-note {
     grid-column: 1 / -1;

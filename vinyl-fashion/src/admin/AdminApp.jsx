@@ -21,6 +21,8 @@ import {
   updateProduct,
   deleteProduct,
   updateVariant,
+  addVariants,
+  deleteVariants,
   duplicateProduct,
   fetchAlbumRows,
   importSeedAlbums,
@@ -484,7 +486,15 @@ function AddStock() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [cats, setCats] = useState([])
-  const [albumList, setAlbumList] = useState(ALBUMS.map((a) => ({ id: a.id, capsule_no: a.capsuleNo, title: a.title })))
+  const [albumList, setAlbumList] = useState(
+    ALBUMS.map((a) => ({ id: a.id, capsule_no: a.capsuleNo, title: a.title, status: 'live', effects: a.effects }))
+  )
+  // Has the user chosen a capsule by hand? Until they do, the form
+  // retargets itself to a shoppable album once the real list lands —
+  // the seed's first entry is whatever happens to sit at the top of
+  // albums.js, and dropping new pieces on a locked Coming-Soon capsule
+  // hides them from the storefront with no warning.
+  const albumPicked = useRef(false)
   const [selectedSlot, setSelectedSlot] = useState(0)
   const fileRef = useRef(null)
   const [sizeInput, setSizeInput] = useState('')
@@ -583,11 +593,35 @@ function AddStock() {
   const previews = useMemo(() => files.map((fl) => URL.createObjectURL(fl)), [files])
   const selectedAlbum = albumList.find((a) => a.id === f.album_id)
   const seedAlbum = ALBUMS.find((a) => a.id === f.album_id)
+  // Shoppable capsules first — the picker runs to ~90 records, and the
+  // ones a new piece will actually surface on belong at the top.
+  const albumGroups = useMemo(() => {
+    const openRows = []
+    const lockedRows = []
+    for (const a of albumList) {
+      if (a.status === 'live' && !a.effects?.comingSoon) openRows.push(a)
+      else lockedRows.push(a)
+    }
+    return { openRows, lockedRows }
+  }, [albumList])
+  // a piece filed here won't reach the storefront until the capsule opens
+  const targetLocked = !!selectedAlbum && (selectedAlbum.status !== 'live' || !!selectedAlbum.effects?.comingSoon)
   const mockSlots = seedAlbum?.capsule?.length ? seedAlbum.capsule : makePlaceholderCapsule()
 
   useEffect(() => {
     getCategories().then((c) => c.length && setCats(c)).catch(() => {})
-    fetchAlbumRows().then((r) => r?.length && setAlbumList(r)).catch(() => {})
+    fetchAlbumRows()
+      .then((r) => {
+        if (!r?.length) return
+        setAlbumList(r)
+        if (albumPicked.current) return
+        // land on somewhere the piece will actually be visible: an open
+        // capsule first, then any live one, else whatever's first
+        const open = r.find((a) => a.status === 'live' && !a.effects?.comingSoon)
+        const target = open || r.find((a) => a.status === 'live') || r[0]
+        if (target) setF((s) => ({ ...s, album_id: target.id }))
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -638,14 +672,8 @@ function AddStock() {
         if (comboImg.has(mk)) return comboImg.get(mk)
         return c ? colorImg.get(c) : ''
       }
-      // encode a full variant line as
-      //   combo:ColourName|#hex|imgIdx|DesignLabel   (+ size in its own col)
-      const comboColor = (c, d, img) => {
-        // '|' is the field separator — scrub it out of the colour name
-        const nm = c ? c.name.trim().replace(/\|/g, '·') : ''
-        const cs = c ? `${nm}|${c.hex || ''}|${img}` : `||${img || ''}`
-        return `combo:${cs}|${d || ''}`
-      }
+      const comboColor = (c, d, img) =>
+        encodeCombo({ name: c ? c.name : '', hex: c ? c.hex : '', imgIdx: img, design: d })
       // every active colour×design×size combo becomes its own stock row
       const combos = showGrid
         ? activeCombos.flatMap(({ c, d }) =>
@@ -694,9 +722,17 @@ function AddStock() {
       <div className="adm-stock-context full">
         <div>
           <p className="adm-sec-title">ADDING TO {selectedAlbum?.title || seedAlbum?.title || f.album_id}</p>
-          <p className="adm-note">
-            Placeholder capsule slots stay on the storefront until this album has real stock. Once you add products here, those real pieces replace the placeholder grid for this capsule.
-          </p>
+          {targetLocked ? (
+            <p className="adm-warn">
+              ⚠ This capsule is {selectedAlbum.status !== 'live' ? 'a draft' : 'on the Coming-Soon wall'} — shoppers
+              can't open it, so anything you add here stays invisible on the storefront until you open it in the Album
+              Studio. Pick an OPEN capsule above if this piece is meant to sell now.
+            </p>
+          ) : (
+            <p className="adm-note">
+              Placeholder capsule slots stay on the storefront until this album has real stock. Once you add products here, those real pieces replace the placeholder grid for this capsule.
+            </p>
+          )}
         </div>
         <div className="adm-slot-strip">
           {mockSlots.map((item, i) => (
@@ -722,8 +758,27 @@ function AddStock() {
       <div className="adm-sect-head full"><span>1</span> THE BASICS</div>
       <div className="adm-field full"><label>TITLE</label><input required value={f.title} onChange={set('title')} placeholder="Runaway Varsity" /></div>
       <div className="adm-field"><label>CAPSULE / ALBUM</label>
-        <select value={f.album_id} onChange={set('album_id')}>
-          {albumList.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+        <select
+          value={f.album_id}
+          onChange={(e) => {
+            albumPicked.current = true
+            set('album_id')(e)
+          }}
+        >
+          {albumGroups.openRows.length > 0 && (
+            <optgroup label="OPEN — PIECES GO LIVE">
+              {albumGroups.openRows.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+            </optgroup>
+          )}
+          {albumGroups.lockedRows.length > 0 && (
+            <optgroup label="LOCKED — PIECES STAY HIDDEN">
+              {albumGroups.lockedRows.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.title} {a.status !== 'live' ? '— draft' : '— coming soon'}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
       <div className="adm-field"><label>GARMENT TYPE (placeholder art)</label>
@@ -993,15 +1048,27 @@ function AddStock() {
 // ── ledger ───────────────────────────────────────────────────────
 // parse a variant row back into something readable: colour name+swatch,
 // design label, size — whatever the row carries
+// Encode a colour×design line. The ONLY place this string is built —
+// Add Stock and the ledger editor both come through here so the two can
+// never drift apart on the wire format. '|' is the field separator, so
+// scrub it out of the colour name.
+const encodeCombo = ({ name, hex, imgIdx, design }) => {
+  const nm = (name || '').trim().replace(/\|/g, '·')
+  const img = imgIdx == null || imgIdx === '' ? '' : imgIdx
+  return `combo:${nm}|${nm ? hex || '' : ''}|${img}|${design || ''}`
+}
+
 const parseVariant = (v) => {
   const c = v.color || ''
   if (c.startsWith('combo:')) {
     const parts = c.slice('combo:'.length).split('|')
     const design = parts.slice(3).join('|').trim()
+    const idxRaw = parts[2]
     return {
       kind: 'combo',
       name: (parts[0] || '').trim(),
       hex: (parts[1] || '').trim() || null,
+      imgIdx: idxRaw !== '' && idxRaw != null ? Number(idxRaw) : null,
       design: design || null,
       size: v.size || null,
     }
@@ -1012,6 +1079,7 @@ const parseVariant = (v) => {
     kind: c.startsWith('design:') ? 'design' : c ? 'colour' : 'size',
     name: (nm || '').trim(),
     hex: (hex || '').trim() || null,
+    imgIdx: null,
     design: null,
     size: v.size || null,
   }
@@ -1023,60 +1091,329 @@ const isStockRow = (v) => {
   return c.startsWith('combo:') || c.startsWith('color:') || (!c.startsWith('design:') && !!v.size)
 }
 
-function VariantPanel({ p, onChanged }) {
-  const rows = (p.product_variants || []).filter(isStockRow)
-  const designs = (p.product_variants || []).filter((v) => !isStockRow(v))
-  const [stocks, setStocks] = useState(() => Object.fromEntries(rows.map((v) => [v.id, v.stock ?? 0])))
-  const [saving, setSaving] = useState(false)
+// ── the ledger's full variant editor ─────────────────────────────
+// Everything the Add Stock grid can do, but against a product that
+// already exists — add a colour / design / size, switch a pairing off,
+// retune any count.
+//
+// Saving is a DIFF, never a rebuild. Existing lines are matched by
+// colour¦design¦size and keep their row id, so their stock and their
+// photo index survive untouched; only genuinely new pairings are
+// inserted and only ones you removed are deleted. A rewrite-on-save
+// would throw away every per-combo photo link on the product.
+const vKey = (colour, design, size) => `${colour || ''}¦${design || ''}¦${size || ''}`
 
-  const bump = (id, d) => setStocks((s) => ({ ...s, [id]: Math.max(0, (Number(s[id]) || 0) + d) }))
-  const dirty = rows.some((v) => Number(stocks[v.id]) !== Number(v.stock ?? 0))
-  const total = rows.reduce((s, v) => s + (Number(stocks[v.id]) || 0), 0)
+function VariantEditor({ p, onChanged }) {
+  const stockRows = useMemo(() => (p.product_variants || []).filter(isStockRow), [p])
 
-  const saveAll = async () => {
-    setSaving(true)
-    try {
-      for (const v of rows) {
-        if (Number(stocks[v.id]) !== Number(v.stock ?? 0)) await updateVariant(v.id, { stock: Number(stocks[v.id]) || 0 })
+  // read the product's current grid back out of its variant rows
+  const initial = useMemo(() => {
+    const colours = []
+    const designs = []
+    const sizes = []
+    const byKey = new Map()
+    for (const v of stockRows) {
+      const i = parseVariant(v)
+      if (i.name && !colours.some((c) => c.name === i.name)) {
+        colours.push({ name: i.name, hex: i.hex || '#888888', imgIdx: i.imgIdx })
       }
-      // keep the product's headline stock = sum of its variant grid
+      if (i.design && !designs.includes(i.design)) designs.push(i.design)
+      if (i.size && !sizes.includes(i.size)) sizes.push(i.size)
+      byKey.set(vKey(i.name, i.design, i.size), {
+        id: v.id, stock: v.stock ?? 0, colour: v.color, imgIdx: i.imgIdx,
+      })
+    }
+    // The photo index is per colour×DESIGN, not per colour — one colour
+    // routinely carries a different shot for each design it's printed
+    // with. Keep those per-pair indexes so a re-encode can hand every row
+    // back its own photo instead of flattening them all onto the colour's
+    // first one.
+    const pairImg = new Map()
+    const colourImg = new Map()
+    for (const v of stockRows) {
+      const i = parseVariant(v)
+      if (i.imgIdx == null) continue
+      const pk = `${i.name || ''}¦${i.design || ''}`
+      if (!pairImg.has(pk)) pairImg.set(pk, i.imgIdx)
+      if (i.name && !colourImg.has(i.name)) colourImg.set(i.name, i.imgIdx)
+    }
+    // Which colour×design pairings actually exist. A pairing with no line
+    // was switched off when the product was built, so it must start OFF —
+    // otherwise the editor shows the full cross-product and merely opening
+    // it and pressing save would resurrect combinations that were never
+    // made (SNITCHES has three of them).
+    const present = new Set()
+    for (const v of stockRows) {
+      const i = parseVariant(v)
+      present.add(`${i.name || ''}¦${i.design || ''}`)
+    }
+    const off = {}
+    for (const c of colours.length ? colours : [null]) {
+      for (const d of designs.length ? designs : [null]) {
+        const k = `${c ? c.name : ''}¦${d || ''}`
+        if (!present.has(k)) off[k] = true
+      }
+    }
+    return { colours, designs, sizes, byKey, off, pairImg, colourImg }
+  }, [stockRows])
+
+  const [colours, setColours] = useState(initial.colours)
+  const [designs, setDesigns] = useState(initial.designs)
+  const [sizes, setSizes] = useState(initial.sizes)
+  const [cells, setCells] = useState(() =>
+    Object.fromEntries([...initial.byKey].map(([k, v]) => [k, v.stock]))
+  )
+  const [dropped, setDropped] = useState(initial.off) // pairings switched off, keyed colour¦design
+  const [sizeInput, setSizeInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const effColours = colours.length ? colours : [null]
+  const effDesigns = designs.length ? designs : [null]
+  const effSizes = sizes.length ? sizes : [null]
+  const pairKey = (c, d) => `${c ? c.name : ''}¦${d || ''}`
+  const pairs = effColours
+    .flatMap((c) => effDesigns.map((d) => ({ c, d })))
+    .filter(({ c, d }) => !dropped[pairKey(c, d)])
+
+  const cellAt = (c, d, sz) => {
+    const v = cells[vKey(c ? c.name : '', d, sz)]
+    return v === undefined ? 0 : v
+  }
+  const cellNum = (c, d, sz) => {
+    const n = Math.floor(Number(cellAt(c, d, sz)))
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  const setCell = (c, d, sz, val) =>
+    setCells((m) => ({ ...m, [vKey(c ? c.name : '', d, sz)]: val }))
+  const total = pairs.reduce((s, { c, d }) => s + effSizes.reduce((t, sz) => t + cellNum(c, d, sz), 0), 0)
+
+  // ── what save would actually do, computed up front so the button can
+  //    tell you before you press it ──
+  const plan = useMemo(() => {
+    const desired = new Map()
+    for (const { c, d } of pairs) {
+      for (const sz of effSizes) {
+        const k = vKey(c ? c.name : '', d, sz)
+        const have = initial.byKey.get(k)
+        // A line that already exists keeps its OWN photo. A brand-new one
+        // inherits from its colour×design pair if that pair is already
+        // photographed (a new size of an existing combo), else from the
+        // colour's first shot.
+        const img = have
+          ? have.imgIdx
+          : initial.pairImg.get(`${c ? c.name : ''}¦${d || ''}`) ??
+            (c ? initial.colourImg.get(c.name) : undefined) ??
+            null
+        const colour = encodeCombo({
+          name: c ? c.name : '',
+          hex: c ? c.hex : '',
+          imgIdx: img,
+          design: d,
+        })
+        const n = Math.floor(Number(cells[k] === undefined ? 0 : cells[k]))
+        desired.set(k, { colour, size: sz, stock: Number.isFinite(n) && n > 0 ? n : 0 })
+      }
+    }
+    const inserts = []
+    const updates = []
+    for (const [k, want] of desired) {
+      const have = initial.byKey.get(k)
+      if (!have) { inserts.push(want); continue }
+      const patch = {}
+      if (Number(have.stock) !== want.stock) patch.stock = want.stock
+      if (have.colour !== want.colour) patch.colour = want.colour // rename / recolour
+      if (Object.keys(patch).length) updates.push({ id: have.id, patch })
+    }
+    const deletes = []
+    for (const [k, have] of initial.byKey) if (!desired.has(k)) deletes.push({ id: have.id, k })
+    return { inserts, updates, deletes }
+  }, [pairs, effSizes, cells, initial])
+
+  const dirty = plan.inserts.length || plan.updates.length || plan.deletes.length
+
+  const save = async () => {
+    if (plan.deletes.length) {
+      const ok = window.confirm(
+        `Remove ${plan.deletes.length} stock line${plan.deletes.length === 1 ? '' : 's'} from “${p.title}”?\n\n` +
+          plan.deletes.slice(0, 8).map((d) => '  · ' + d.k.replace(/¦/g, ' · ')).join('\n') +
+          (plan.deletes.length > 8 ? `\n  … and ${plan.deletes.length - 8} more` : '') +
+          '\n\nTheir stock counts are lost. Everything else keeps its count and photo.'
+      )
+      if (!ok) return
+    }
+    setSaving(true)
+    setMsg(null)
+    try {
+      for (const u of plan.updates) {
+        await updateVariant(u.id, {
+          ...(u.patch.stock !== undefined ? { stock: u.patch.stock } : {}),
+          ...(u.patch.colour !== undefined ? { color: u.patch.colour } : {}),
+        })
+      }
+      await addVariants(p.id, plan.inserts.map((i) => ({ color: i.colour, size: i.size, stock: i.stock })))
+      await deleteVariants(plan.deletes.map((d) => d.id))
       await updateProduct(p.id, { stock: total })
+      setMsg({ ok: true, text: `Saved — ${plan.inserts.length} added, ${plan.updates.length} changed, ${plan.deletes.length} removed.` })
       onChanged()
-    } catch (e) { alert(e.message) }
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    }
     setSaving(false)
   }
 
-  if (!rows.length) return <p className="adm-note" style={{ padding: '6px 4px' }}>No colour/size variants on this product — the STOCK column above is the single count.</p>
+  const addSizes = (raw) => {
+    const parts = String(raw).split(',').map((v) => v.trim()).filter(Boolean)
+    if (!parts.length) return
+    setSizes((s) => {
+      const next = [...s]
+      for (const x of parts) if (!next.some((y) => y.toLowerCase() === x.toLowerCase())) next.push(x)
+      return next
+    })
+    setSizeInput('')
+  }
 
   return (
     <div className="adm-var-panel">
-      {rows.map((v) => {
-        const info = parseVariant(v)
-        const n = Number(stocks[v.id]) || 0
-        return (
-          <div className={`adm-var-chip ${n === 0 ? 'out' : n <= 2 ? 'low' : ''}`} key={v.id}>
-            <span className="adm-var-label">
-              {info.hex && <i className="adm-dot" style={{ background: info.hex }} />}
-              {info.name || 'ALL'}{info.design ? ` · ${info.design}` : ''}{info.size ? ` · ${info.size}` : ''}
-            </span>
-            <span className="adm-step">
-              <button type="button" onClick={() => bump(v.id, -1)} aria-label="minus">−</button>
-              <input
-                type="number" min="0" value={stocks[v.id]}
-                onChange={(e) => setStocks((s) => ({ ...s, [v.id]: e.target.value }))}
+      {/* ── colours ── */}
+      <div className="adm-ve-sect">
+        <span className="adm-ve-k">COLOURS</span>
+        <div className="adm-ve-chips">
+          {colours.map((c, i) => (
+            <span className="adm-ve-chip" key={i}>
+              <ColorPicker
+                value={c.hex || '#888888'}
+                onChange={(hex) => setColours((rs) => rs.map((r, j) => (j === i ? { ...r, hex } : r)))}
               />
-              <button type="button" onClick={() => bump(v.id, +1)} aria-label="plus">＋</button>
+              <input
+                className="adm-ve-name"
+                value={c.name}
+                onChange={(e) => setColours((rs) => rs.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))}
+              />
+              <button type="button" className="adm-ve-x" title="Remove this colour" onClick={() => setColours((rs) => rs.filter((_, j) => j !== i))}>✕</button>
             </span>
-          </div>
-        )
-      })}
+          ))}
+          <button type="button" className="adm-btn ghost sm" onClick={() => setColours((rs) => [...rs, { name: '', hex: '#888888', imgIdx: null }])}>＋ COLOUR</button>
+        </div>
+      </div>
+
+      {/* ── designs ── */}
+      <div className="adm-ve-sect">
+        <span className="adm-ve-k">DESIGNS</span>
+        <div className="adm-ve-chips">
+          {designs.map((d, i) => (
+            <span className="adm-ve-chip" key={i}>
+              <input
+                className="adm-ve-name wide"
+                value={d}
+                onChange={(e) => setDesigns((rs) => rs.map((r, j) => (j === i ? e.target.value : r)))}
+              />
+              <button type="button" className="adm-ve-x" title="Remove this design" onClick={() => setDesigns((rs) => rs.filter((_, j) => j !== i))}>✕</button>
+            </span>
+          ))}
+          <button type="button" className="adm-btn ghost sm" onClick={() => setDesigns((rs) => [...rs, ''])}>＋ DESIGN</button>
+        </div>
+      </div>
+
+      {/* ── sizes ── */}
+      <div className="adm-ve-sect">
+        <span className="adm-ve-k">SIZES</span>
+        <div className="adm-ve-chips">
+          {sizes.map((s, i) => (
+            <span className="adm-ve-chip" key={i}>
+              {s}
+              <button type="button" className="adm-ve-x" title="Remove this size" onClick={() => setSizes((rs) => rs.filter((_, j) => j !== i))}>✕</button>
+            </span>
+          ))}
+          <input
+            className="adm-ve-name"
+            placeholder="add size ↵"
+            value={sizeInput}
+            onChange={(e) => setSizeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSizes(sizeInput) } }}
+          />
+          {Object.entries(SIZE_PRESETS).map(([k, list]) => (
+            <button type="button" key={k} className="adm-btn ghost sm" onClick={() => addSizes(list.join(','))}>＋ {k}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── the grid ── */}
+      <div className="adm-ve-gridwrap">
+        <table className="adm-ve-grid">
+          <thead>
+            <tr>
+              <th>COLOUR × DESIGN</th>
+              {effSizes.map((sz, i) => <th key={i}>{sz || 'ONE SIZE'}</th>)}
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {effColours.flatMap((c) =>
+              effDesigns.map((d) => {
+                const off = !!dropped[pairKey(c, d)]
+                return (
+                  <tr key={pairKey(c, d)} className={off ? 'off' : ''}>
+                    <td className="adm-ve-pair">
+                      {c && <i className="adm-dot" style={{ background: c.hex || '#888' }} />}
+                      {c ? c.name || '—' : 'ALL'}{d ? ` · ${d}` : ''}
+                    </td>
+                    {effSizes.map((sz, i) => (
+                      <td key={i}>
+                        {off ? (
+                          <span className="adm-ve-offcell">—</span>
+                        ) : (
+                          <input
+                            type="number" min="0"
+                            value={cellAt(c, d, sz)}
+                            onChange={(e) => setCell(c, d, sz, e.target.value)}
+                          />
+                        )}
+                      </td>
+                    ))}
+                    <td>
+                      <button
+                        type="button"
+                        className={`adm-ve-toggle ${off ? 'off' : ''}`}
+                        title={off ? 'This pairing is switched off — click to make it' : "Switch this pairing off (it won't be offered at all)"}
+                        onClick={() => setDropped((x) => {
+                          const k = pairKey(c, d); const n = { ...x }
+                          if (n[k]) delete n[k]; else n[k] = true
+                          return n
+                        })}
+                      >
+                        {off ? 'OFF' : 'ON'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
       <div className="adm-var-foot">
-        {designs.length > 0 && <span className="adm-note">designs: {designs.map((d) => parseVariant(d).name).join(', ')}</span>}
-        <span className="adm-note">grid total: <b>{total}</b></span>
-        <button type="button" className="adm-btn" disabled={!dirty || saving} onClick={saveAll}>
-          {saving ? 'SAVING…' : dirty ? 'SAVE STOCK' : 'SAVED ✓'}
+        <span className="adm-note">
+          grid total: <b>{total}</b>
+          {dirty ? (
+            <>
+              {' · '}
+              <b>+{plan.inserts.length}</b> new, <b>{plan.updates.length}</b> changed,{' '}
+              <b className={plan.deletes.length ? 'adm-ve-del' : ''}>−{plan.deletes.length}</b> removed
+            </>
+          ) : ' · nothing to save'}
+        </span>
+        {msg && <span className={`adm-note ${msg.ok ? '' : 'adm-ve-del'}`}>{msg.text}</span>}
+        <button type="button" className="adm-btn" disabled={!dirty || saving} onClick={save}>
+          {saving ? 'SAVING…' : dirty ? 'SAVE GRID' : 'SAVED ✓'}
         </button>
       </div>
+      <p className="adm-note">
+        Existing lines keep their row id, so their photo stays attached. Switching a pairing OFF removes it from the
+        shop entirely — it reads as unavailable, never “sold out”. New pairings inherit their colour's photo; to give
+        one its own shot, add it from ADD STOCK.
+      </p>
     </div>
   )
 }
@@ -1174,7 +1511,7 @@ function Ledger() {
                 </td>
               </tr>
               {open === p.id && (
-                <tr className="adm-var-tr"><td colSpan="9"><VariantPanel p={p} onChanged={reload} /></td></tr>
+                <tr className="adm-var-tr"><td colSpan="9"><VariantEditor key={p.id} p={p} onChanged={reload} /></td></tr>
               )}
               </Fragment>
             )})}
@@ -1586,6 +1923,8 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
     palette: { ...(a.palette || {}) }, fonts: { ...(a.fonts || {}) },
     ticker: [...(a.ticker || [])], notes: (a.notes || []).map((n) => ({ ...n })), artwork: a.artwork || '',
     comingSoon: !!a.effects?.comingSoon, comingSoonText: a.effects?.comingSoonText || 'COMING SOON',
+    preorder: !!a.effects?.preorder, preorderText: a.effects?.preorderText || 'PRE-ORDER',
+    preorderNote: a.effects?.preorderNote || 'SHIPS IN 2–3 WEEKS',
     capsuleTitle: a.effects?.capsuleTitle || '',
     clipStart: a.clip?.start ?? '', clipEnd: a.clip?.duration ? (a.clip?.start ?? 0) + a.clip.duration : '', clipDur: a.clip?.duration ?? '', clipSrc: a.clip?.src || '',
   })
@@ -1604,7 +1943,15 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
         featured: edit.featured, story: edit.story, status: edit.status, sort: Number(edit.sort) || 0,
         palette: edit.palette, fonts: edit.fonts, ticker: edit.ticker.filter(Boolean),
         notes: edit.notes.filter((n) => n.text), artwork: edit.artwork || null,
-        effects: { ...a.effects, comingSoon: edit.comingSoon, comingSoonText: edit.comingSoonText, capsuleTitle: edit.capsuleTitle.trim() },
+        effects: {
+          ...a.effects,
+          comingSoon: edit.comingSoon, comingSoonText: edit.comingSoonText,
+          // a locked capsule can't also be taking pre-orders
+          preorder: !edit.comingSoon && edit.preorder,
+          preorderText: edit.preorderText.trim() || 'PRE-ORDER',
+          preorderNote: edit.preorderNote.trim(),
+          capsuleTitle: edit.capsuleTitle.trim(),
+        },
         clip: edit.clipStart !== '' || edit.clipEnd !== '' || edit.clipSrc
           ? { start: Number(edit.clipStart) || 0, ...(edit.clipEnd !== '' ? { duration: Math.max(0.5, Number(edit.clipEnd) - (Number(edit.clipStart) || 0)) } : {}), ...(edit.clipSrc ? { src: edit.clipSrc } : {}) }
           : {},
@@ -1640,7 +1987,7 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
               .catch((err) => alert(err.message))
           }}
         >
-          {a.effects?.comingSoon ? '◷ SOON' : '● OPEN'}
+          {a.effects?.comingSoon ? '◷ SOON' : a.effects?.preorder ? '◆ PRE-ORDER' : '● OPEN'}
         </button>
         <span className={`pill ${a.status === 'live' ? 'live' : 'draft'}`}>{a.status}</span>
       </div>
@@ -1688,6 +2035,31 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
             <div className="adm-field full"><label>COMING-SOON STICKER TEXT</label>
               <input value={edit.comingSoonText} onChange={(e) => set('comingSoonText', e.target.value)} placeholder="COMING SOON" />
             </div>
+          )}
+          {/* pre-order only means anything on a capsule shoppers can open */}
+          {!edit.comingSoon && (
+            <>
+              <div className="adm-field"><label>PRE-ORDER</label>
+                <select value={edit.preorder ? 'yes' : 'no'} onChange={(e) => set('preorder', e.target.value === 'yes')}>
+                  <option value="no">no — sell from stock</option>
+                  <option value="yes">yes — taking reservations</option>
+                </select>
+              </div>
+              {edit.preorder && (
+                <>
+                  <div className="adm-field"><label>PRE-ORDER BADGE</label>
+                    <input value={edit.preorderText} onChange={(e) => set('preorderText', e.target.value)} placeholder="PRE-ORDER" />
+                  </div>
+                  <div className="adm-field full"><label>SHIP WINDOW (shown next to the badge everywhere)</label>
+                    <input value={edit.preorderNote} onChange={(e) => set('preorderNote', e.target.value)} placeholder="SHIPS IN 2–3 WEEKS" />
+                  </div>
+                  <p className="adm-note full">
+                    While a capsule is on pre-order its pieces ignore stock counts — nothing reads SOLD OUT and no
+                    “only N left” nudge appears. Colour×design pairings you switched off in the grid stay unavailable.
+                  </p>
+                </>
+              )}
+            </>
           )}
           <div className="adm-field full"><label>COVER ART OVERRIDE</label>
             <UploadField accept="image/*" label="Upload cover" onUploaded={(url) => set('artwork', url)} prefix="covers" />

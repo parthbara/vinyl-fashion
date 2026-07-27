@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ALBUMS } from '../data/albums'
-import { fetchAlbums } from './db'
+import { fetchAlbums, SEED } from './db'
 
 // The live crate. Renders instantly with the built-in seed, then
 // swaps in whatever the DB / Album Studio holds (edits, new capsules,
@@ -10,7 +9,9 @@ import { fetchAlbums } from './db'
 let cachedAlbums = null
 
 export function useAlbums() {
-  const [albums, setAlbums] = useState(cachedAlbums || ALBUMS)
+  // the normalized seed, so coming-soon capsules don't flash as
+  // available on the first paint before the DB list lands
+  const [albums, setAlbums] = useState(cachedAlbums || SEED)
   useEffect(() => {
     let live = true
     const load = () =>

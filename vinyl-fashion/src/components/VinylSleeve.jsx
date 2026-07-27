@@ -87,13 +87,19 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
 
   return (
     <div
-      className={`sleeve-slot ${hidden ? 'is-ghost' : ''} ${album.comingSoon ? 'is-soon' : ''}`}
+      className={`sleeve-slot ${hidden ? 'is-ghost' : ''} ${album.comingSoon ? 'is-soon' : ''} ${album.preorder ? 'is-pre' : ''}`}
       data-sleeve={album.id}
       style={{ '--i': index }}
       data-cursor={album.comingSoon ? undefined : 'open'}
       role="button"
       tabIndex={0}
-      aria-label={album.comingSoon ? `${album.title} — ${album.comingSoonText}` : `Open ${album.artist} — ${album.title} capsule`}
+      aria-label={
+        album.comingSoon
+          ? `${album.title} — ${album.comingSoonText}`
+          : album.preorder
+            ? `Pre-order ${album.artist} — ${album.title} capsule, ${album.preorderNote}`
+            : `Open ${album.artist} — ${album.title} capsule`
+      }
       onPointerMove={fine ? onMove : undefined}
       onPointerEnter={fine ? onEnter : undefined}
       onPointerLeave={fine ? onLeave : undefined}
@@ -122,6 +128,9 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
                 <b>{album.comingSoonText}</b>
               </span>
             )}
+            {/* a corner tag, not a full stamp — this is the record we
+                actually want people to look at, so the art stays clear */}
+            {album.preorder && <span className="pre-tag">{album.preorderText}</span>}
           </div>
           <div className="sleeve-shadow" />
         </div>
@@ -129,7 +138,14 @@ export default function VinylSleeve({ album, index, onOpen, onSoon, onHover, hid
       <div className="slot-meta">
         <span className="slot-artist">{album.artist}</span>
         <span className="slot-title">{album.title}</span>
-        {!album.comingSoon && <span className="slot-live">● AVAILABLE NOW</span>}
+        {album.preorder ? (
+          <span className="slot-live is-pre">
+            ◆ {album.preorderText}
+            <i>{album.preorderNote}</i>
+          </span>
+        ) : !album.comingSoon ? (
+          <span className="slot-live">● AVAILABLE NOW</span>
+        ) : null}
       </div>
     </div>
   )

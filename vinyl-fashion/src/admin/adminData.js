@@ -180,6 +180,27 @@ export async function updateVariant(id, patch) {
   if (error) throw error
 }
 
+export async function addVariants(product_id, rows) {
+  if (!rows?.length) return
+  const s = await sb()
+  const { error } = await s
+    .from('product_variants')
+    .insert(rows.map((r) => ({ product_id, color: r.color, size: r.size ?? null, stock: r.stock ?? 0 })))
+  if (error) throw error
+}
+
+export async function deleteVariants(ids) {
+  if (!ids?.length) return
+  const s = await sb()
+  const { error } = await s.from('product_variants').delete().in('id', ids)
+  if (error) throw error
+}
+
+// NOTE for whoever adds per-combo photo uploads to the ledger editor:
+// variant rows address their photo by INDEX into products.images, so new
+// shots may only be appended. Splice or reorder that array and every
+// stored index shifts, and each combo starts showing another garment.
+
 // One-click restock/copy: same fields + photos + variants, lands hidden
 // so it never flashes onto the storefront before it's reviewed.
 export async function duplicateProduct(p) {

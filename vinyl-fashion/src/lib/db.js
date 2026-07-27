@@ -108,11 +108,32 @@ export async function fetchProducts(albumId) {
   return data.length ? data.map(normalizeProduct) : null
 }
 
+// The storefront flags, derived from the stored `effects` blob. Both
+// the DB path and the seed go through here — a record whose flags came
+// back undefined would quietly turn every unreleased capsule openable
+// and orderable the moment Supabase is unreachable.
+//
+// Coming-soon always wins over pre-order: an album can't be locked
+// behind a sticker and taking pre-orders at the same time, and letting
+// both through would hang a PRE-ORDER button on a record nobody can
+// even open.
+const flagsFrom = (effects = {}) => ({
+  comingSoon: !!effects.comingSoon,
+  comingSoonText: effects.comingSoonText || 'COMING SOON',
+  preorder: !effects.comingSoon && !!effects.preorder,
+  preorderText: effects.preorderText || 'PRE-ORDER',
+  preorderNote: effects.preorderNote || 'SHIPS IN 2–3 WEEKS',
+  capsuleTitle: effects.capsuleTitle || '',
+})
+
+const fromSeed = (a) => ({ ...a, ...flagsFrom(a.effects) })
+export const SEED = ALBUMS.map(fromSeed)
+
 // Albums from the DB, merged over the local seed so any field the
 // Studio hasn't set still has a sensible default. Falls back entirely
 // to the seed when the DB is unavailable.
 export async function fetchAlbums() {
-  if (!hasSupabase) return ALBUMS
+  if (!hasSupabase) return SEED
   const supabase = await getSupabase()
   // status 'live' shows normally; 'draft' is hidden from the store.
   // "Coming soon" is a flag inside effects (so the album stays 'live'
@@ -123,7 +144,7 @@ export async function fetchAlbums() {
     .select('*')
     .eq('status', 'live')
     .order('sort', { ascending: true })
-  if (error || !data?.length) return ALBUMS
+  if (error || !data?.length) return SEED
   const seedById = Object.fromEntries(ALBUMS.map((a) => [a.id, a]))
   return data.map((row) => {
     const effects = { ...seedById[row.id]?.effects, ...(row.effects || {}) }
@@ -147,9 +168,7 @@ export async function fetchAlbums() {
       effects,
       clip: row.clip && Object.keys(row.clip).length ? row.clip : seedById[row.id]?.clip ?? null,
       capsule: seedById[row.id]?.capsule ?? makePlaceholderCapsule(),
-      comingSoon: !!effects.comingSoon,
-      comingSoonText: effects.comingSoonText || 'COMING SOON',
-      capsuleTitle: effects.capsuleTitle || '',
+      ...flagsFrom(effects),
     }
   })
 }

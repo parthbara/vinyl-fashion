@@ -516,6 +516,9 @@ function AddStock() {
   // per-combo stock: "colour¦design¦size" → count ('' while editing).
   // untouched cells default to 1, like a fresh pressing of each combo.
   const [cells, setCells] = useState({})
+  // per-combo price overrides, same keys as `cells`. Blank = charge the
+  // product price typed above; a number here overrides it for that line.
+  const [prices, setPrices] = useState({})
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   // sizes/colors are freeform and kept as ordered, de-duped chip lists
@@ -580,6 +583,11 @@ function AddStock() {
     .filter(({ c, d }) => !isExcluded(c, d))
 
   const cellShown = (k) => (cells[k] === undefined ? 1 : cells[k])
+  // blank / junk / zero → no override
+  const cellPrice = (k) => {
+    const n = Number(prices[k])
+    return prices[k] !== undefined && prices[k] !== '' && Number.isFinite(n) && n > 0 ? n : null
+  }
   const cellNum = (k) => {
     const v = cells[k]
     if (v === undefined) return 1
@@ -681,6 +689,7 @@ function AddStock() {
               color: comboColor(c, d, resolveImg(c, d, sz)),
               size: sz || null,
               stock: cellNum(cellKey(c, d, sz)),
+              price: cellPrice(cellKey(c, d, sz)),
             }))
           )
         : null
@@ -710,6 +719,7 @@ function AddStock() {
       setComboPhotos({})
       setSizePhotos({})
       setCells({})
+      setPrices({})
       if (fileRef.current) fileRef.current.value = ''
     } catch (ex) {
       setMsg({ ok: false, text: ex.message })
@@ -923,7 +933,7 @@ function AddStock() {
       {showGrid && (
         <>
           <div className="adm-sect-head full"><span>5</span> STOCK GRID
-            <em>every colour × design combo · switch off the ones that don’t exist · set the count per size</em>
+            <em>every colour × design combo · switch off the ones that don’t exist · set the count per size · type a price under any cell to charge that line differently</em>
           </div>
           <div className="adm-field full">
             <div className="adm-grid-bar">
@@ -986,6 +996,19 @@ function AddStock() {
                                     onChange={(e) => setCells((cs) => ({ ...cs, [k]: e.target.value }))}
                                     onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                                   />
+                                  {!off && (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      className="cmb-cell-price"
+                                      placeholder={f.price ? `${f.price}` : 'price'}
+                                      title="Price for this exact line — leave blank to charge the product price above"
+                                      value={prices[k] ?? ''}
+                                      onChange={(e) => setPrices((m) => ({ ...m, [k]: e.target.value }))}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                                    />
+                                  )}
                                   {!off && (
                                     <span className="cmb-cell-photo-wrap">
                                       <label className={`cmb-cell-photo ${szPhoto ? 'has' : ''}`} title="Optional photo for this exact size (overrides the combo photo)">
@@ -1121,6 +1144,7 @@ function VariantEditor({ p, onChanged }) {
       if (i.size && !sizes.includes(i.size)) sizes.push(i.size)
       byKey.set(vKey(i.name, i.design, i.size), {
         id: v.id, stock: v.stock ?? 0, colour: v.color, imgIdx: i.imgIdx,
+        price: v.price != null ? Number(v.price) : null,
       })
     }
     // The photo index is per colour×DESIGN, not per colour — one colour
@@ -1163,6 +1187,10 @@ function VariantEditor({ p, onChanged }) {
   const [cells, setCells] = useState(() =>
     Object.fromEntries([...initial.byKey].map(([k, v]) => [k, v.stock]))
   )
+  // per-line price overrides; '' means "no override, charge the product price"
+  const [vPrices, setVPrices] = useState(() =>
+    Object.fromEntries([...initial.byKey].map(([k, v]) => [k, v.price ?? '']))
+  )
   const [dropped, setDropped] = useState(initial.off) // pairings switched off, keyed colour¦design
   const [sizeInput, setSizeInput] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1186,6 +1214,14 @@ function VariantEditor({ p, onChanged }) {
   }
   const setCell = (c, d, sz, val) =>
     setCells((m) => ({ ...m, [vKey(c ? c.name : '', d, sz)]: val }))
+  const priceAt = (c, d, sz) => vPrices[vKey(c ? c.name : '', d, sz)] ?? ''
+  const setPriceAt = (c, d, sz, val) =>
+    setVPrices((m) => ({ ...m, [vKey(c ? c.name : '', d, sz)]: val }))
+  // blank / junk / zero → no override
+  const priceNum = (raw) => {
+    const n = Number(raw)
+    return raw !== '' && raw != null && Number.isFinite(n) && n > 0 ? n : null
+  }
   const total = pairs.reduce((s, { c, d }) => s + effSizes.reduce((t, sz) => t + cellNum(c, d, sz), 0), 0)
 
   // ── what save would actually do, computed up front so the button can
@@ -1212,7 +1248,12 @@ function VariantEditor({ p, onChanged }) {
           design: d,
         })
         const n = Math.floor(Number(cells[k] === undefined ? 0 : cells[k]))
-        desired.set(k, { colour, size: sz, stock: Number.isFinite(n) && n > 0 ? n : 0 })
+        desired.set(k, {
+          colour,
+          size: sz,
+          stock: Number.isFinite(n) && n > 0 ? n : 0,
+          price: priceNum(vPrices[k]),
+        })
       }
     }
     const inserts = []
@@ -1223,12 +1264,15 @@ function VariantEditor({ p, onChanged }) {
       const patch = {}
       if (Number(have.stock) !== want.stock) patch.stock = want.stock
       if (have.colour !== want.colour) patch.colour = want.colour // rename / recolour
+      // null vs a number both matter here: clearing the box is a real
+      // edit that puts the line back on the product's price
+      if ((have.price ?? null) !== (want.price ?? null)) patch.price = want.price
       if (Object.keys(patch).length) updates.push({ id: have.id, patch })
     }
     const deletes = []
     for (const [k, have] of initial.byKey) if (!desired.has(k)) deletes.push({ id: have.id, k })
     return { inserts, updates, deletes }
-  }, [pairs, effSizes, cells, initial])
+  }, [pairs, effSizes, cells, vPrices, initial])
 
   const dirty = plan.inserts.length || plan.updates.length || plan.deletes.length
 
@@ -1249,9 +1293,13 @@ function VariantEditor({ p, onChanged }) {
         await updateVariant(u.id, {
           ...(u.patch.stock !== undefined ? { stock: u.patch.stock } : {}),
           ...(u.patch.colour !== undefined ? { color: u.patch.colour } : {}),
+          ...(u.patch.price !== undefined ? { price: u.patch.price } : {}),
         })
       }
-      await addVariants(p.id, plan.inserts.map((i) => ({ color: i.colour, size: i.size, stock: i.stock })))
+      await addVariants(
+        p.id,
+        plan.inserts.map((i) => ({ color: i.colour, size: i.size, stock: i.stock, price: i.price }))
+      )
       await deleteVariants(plan.deletes.map((d) => d.id))
       await updateProduct(p.id, { stock: total })
       setMsg({ ok: true, text: `Saved — ${plan.inserts.length} added, ${plan.updates.length} changed, ${plan.deletes.length} removed.` })
@@ -1363,11 +1411,21 @@ function VariantEditor({ p, onChanged }) {
                         {off ? (
                           <span className="adm-ve-offcell">—</span>
                         ) : (
-                          <input
-                            type="number" min="0"
-                            value={cellAt(c, d, sz)}
-                            onChange={(e) => setCell(c, d, sz, e.target.value)}
-                          />
+                          <div className="cmb-cell">
+                            <input
+                              type="number" min="0"
+                              value={cellAt(c, d, sz)}
+                              onChange={(e) => setCell(c, d, sz, e.target.value)}
+                            />
+                            <input
+                              type="number" min="0" step="1"
+                              className="cmb-cell-price"
+                              placeholder={p.price ? `${p.price}` : 'price'}
+                              title="Price for this exact line — clear it to charge the product price"
+                              value={priceAt(c, d, sz)}
+                              onChange={(e) => setPriceAt(c, d, sz, e.target.value)}
+                            />
+                          </div>
                         )}
                       </td>
                     ))}
@@ -1412,7 +1470,8 @@ function VariantEditor({ p, onChanged }) {
       <p className="adm-note">
         Existing lines keep their row id, so their photo stays attached. Switching a pairing OFF removes it from the
         shop entirely — it reads as unavailable, never “sold out”. New pairings inherit their colour's photo; to give
-        one its own shot, add it from ADD STOCK.
+        one its own shot, add it from ADD STOCK. The small box under each count is that line's own price — leave it
+        blank to charge the product price, or set it to make one size or colour cost more.
       </p>
     </div>
   )

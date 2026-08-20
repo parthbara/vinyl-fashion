@@ -1,9 +1,21 @@
 # Netlify config — build, SPA routing, caching, security headers.
 # Works on the free tier.
+#
+# This file MUST live at the repository root. Netlify looks for
+# netlify.toml at the root of the repo; the app is one level down in
+# vinyl-fashion/, so `base` points Netlify there and everything else
+# below is resolved relative to that base. With this file nested inside
+# vinyl-fashion/ instead, Netlify found no config at all, built from the
+# root — which has no package.json and no index.html — and served a 404.
+#
+# Leave "Base directory", "Build command" and "Publish directory" EMPTY
+# in the Netlify UI. UI values override this file, and a half-set UI is
+# what breaks monorepo builds.
 
 [build]
   base = "vinyl-fashion"
   command = "npm run build"
+  # relative to `base` above → vinyl-fashion/dist
   publish = "dist"
 
 # SPA fallback (also mirrored in public/_redirects for local parity).

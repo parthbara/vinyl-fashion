@@ -1,3 +1,7 @@
+-- SUPERSEDED (Aug 2026): Iceman is on regular sale now. Run
+-- open-regular-orders.sql instead. Kept so the next drop can be put
+-- back on reservations by re-running this file.
+--
 -- Put the Iceman capsule on pre-order.
 --
 -- The storefront already reads this correctly without running anything:

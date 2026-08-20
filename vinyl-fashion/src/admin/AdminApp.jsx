@@ -727,8 +727,28 @@ function AddStock() {
     setBusy(false)
   }
 
+  // Jump-to nav for a form that runs well past one screen. Each step
+  // reports whether it has anything in it yet, so an unfinished section
+  // is visible without scrolling the whole way down.
+  const STEPS = [
+    ['s1', '1', 'BASICS', !!f.title.trim()],
+    ['s2', '2', 'DESIGNS', designRows.some((d) => (d.name || '').trim())],
+    ['s3', '3', 'COLOURS', colorRows.some((c) => (c.name || '').trim())],
+    ['s4', '4', 'SIZES', f.sizes.length > 0],
+    ['s5', '5', 'STOCK', gridTotal > 0],
+    ['s6', '6', 'PHOTOS', files.length > 0],
+  ]
+
   return (
     <form className="adm-form" onSubmit={submit}>
+      <nav className="adm-steps full" aria-label="Form sections">
+        {STEPS.map(([id, n, label, done]) => (
+          <a key={id} href={`#${id}`} className={`adm-step ${done ? 'done' : ''}`}>
+            <b>{done ? '✓' : n}</b> {label}
+          </a>
+        ))}
+        <span className="adm-steps-total">{gridTotal} units</span>
+      </nav>
       <div className="adm-stock-context full">
         <div>
           <p className="adm-sec-title">ADDING TO {selectedAlbum?.title || seedAlbum?.title || f.album_id}</p>
@@ -765,7 +785,7 @@ function AddStock() {
           ))}
         </div>
       </div>
-      <div className="adm-sect-head full"><span>1</span> THE BASICS</div>
+      <div id="s1" className="adm-sect-head full"><span>1</span> THE BASICS</div>
       <div className="adm-field full"><label>TITLE</label><input required value={f.title} onChange={set('title')} placeholder="Runaway Varsity" /></div>
       <div className="adm-field"><label>CAPSULE / ALBUM</label>
         <select
@@ -816,7 +836,7 @@ function AddStock() {
       <div className="adm-field full"><label>DESCRIPTION</label><textarea value={f.description} onChange={set('description')} placeholder="Fabric, fit, occasion, garment details." /></div>
       <div className="adm-field full"><label>CAPTION (shown under the piece)</label><input value={f.caption} onChange={set('caption')} placeholder="Numbered like a pressing." /></div>
 
-      <div className="adm-sect-head full"><span>2</span> DESIGNS
+      <div id="s2" className="adm-sect-head full"><span>2</span> DESIGNS
         <em>e.g. Blue silhouette, Black silhouette — tick “also flipped” for a mirrored front↔back version</em>
       </div>
       <div className="adm-field full">
@@ -844,7 +864,7 @@ function AddStock() {
         </div>
       </div>
 
-      <div className="adm-sect-head full"><span>3</span> COLOURS
+      <div id="s3" className="adm-sect-head full"><span>3</span> COLOURS
         <em>pick from the wheel, name it, add that colour’s own photo</em>
       </div>
       <div className="adm-field full">
@@ -893,7 +913,7 @@ function AddStock() {
           <button type="button" onClick={() => addColorRows(COLOR_PRESETS.earth)}>Earth 5</button>
         </div>
       </div>
-      <div className="adm-sect-head full"><span>4</span> SIZES
+      <div id="s4" className="adm-sect-head full"><span>4</span> SIZES
         <em>letters or numbers — leave empty for one-size</em>
       </div>
       <div className="adm-field full">
@@ -932,7 +952,7 @@ function AddStock() {
 
       {showGrid && (
         <>
-          <div className="adm-sect-head full"><span>5</span> STOCK GRID
+          <div id="s5" className="adm-sect-head full"><span>5</span> STOCK GRID
             <em>every colour × design combo · switch off the ones that don’t exist · set the count per size · type a price under any cell to charge that line differently</em>
           </div>
           <div className="adm-field full">
@@ -1040,7 +1060,7 @@ function AddStock() {
         </>
       )}
 
-      <div className="adm-sect-head full"><span>6</span> PHOTOS &amp; EXTRAS</div>
+      <div id="s6" className="adm-sect-head full"><span>6</span> PHOTOS &amp; EXTRAS</div>
       <p className="adm-note full" style={{ marginTop: -4 }}>
         The PHOTOS field is the main carousel — <b>first = cover, then one per design in order</b>.
         Each colour&apos;s own photo (from its row above) is appended automatically and the storefront
@@ -1477,18 +1497,50 @@ function VariantEditor({ p, onChanged }) {
   )
 }
 
+// capsule slugs read like URLs; show them as words
+const capsuleName = (id) =>
+  String(id || '').split('-').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ')
+
 function Ledger() {
   const { busy, data, err, reload } = useLoad(fetchAllProducts)
   const [q, setQ] = useState('')
   const [album, setAlbum] = useState('all')
+  const [view, setView] = useState('all') // all | low | out | hidden
+  const [sort, setSort] = useState({ key: 'title', dir: 1 })
   const [open, setOpen] = useState(null) // product id with the variant grid open
   if (err) return <Err err={err} retry={reload} />
   const all = data || []
   const albumIds = [...new Set(all.map((p) => p.album_id).filter(Boolean))].sort()
-  const products = all.filter(
-    (p) =>
-      (album === 'all' || p.album_id === album) &&
-      `${p.title} ${p.album_id} ${p.category || ''}`.toLowerCase().includes(q.toLowerCase())
+  const isLow = (p) => (p.stock ?? 0) > 0 && p.stock <= 2
+  const isOut = (p) => (p.stock ?? 0) === 0 || p.status === 'soldout'
+  const products = all
+    .filter(
+      (p) =>
+        (album === 'all' || p.album_id === album) &&
+        (view === 'all' ||
+          (view === 'low' && isLow(p)) ||
+          (view === 'out' && isOut(p)) ||
+          (view === 'hidden' && p.status === 'hidden')) &&
+        `${p.title} ${p.album_id} ${p.category || ''}`.toLowerCase().includes(q.toLowerCase())
+    )
+    .sort((x, y) => {
+      const k = sort.key
+      const av = k === 'title' ? String(x.title || '') : k === 'album' ? String(x.album_id || '') : Number(x[k] ?? 0)
+      const bv = k === 'title' ? String(y.title || '') : k === 'album' ? String(y.album_id || '') : Number(y[k] ?? 0)
+      return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * sort.dir
+    })
+  // header cells double as sort toggles
+  const Th = ({ k, children }) => (
+    <th>
+      <button
+        type="button"
+        className={`adm-sort ${sort.key === k ? 'on' : ''}`}
+        onClick={() => setSort((c) => ({ key: k, dir: c.key === k ? -c.dir : 1 }))}
+      >
+        {children}
+        <i>{sort.key === k ? (sort.dir === 1 ? '▲' : '▼') : '↕'}</i>
+      </button>
+    </th>
   )
   const units = products.reduce((s, p) => s + (p.stock || 0), 0)
   const value = products.reduce((s, p) => s + (p.stock || 0) * Number(p.sale_price ?? p.price ?? 0), 0)
@@ -1529,14 +1581,38 @@ function Ledger() {
         <input type="search" placeholder="Search stock ledger…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={album} onChange={(e) => setAlbum(e.target.value)}>
           <option value="all">All capsules</option>
-          {albumIds.map((id) => <option key={id} value={id}>{id}</option>)}
+          {albumIds.map((id) => <option key={id} value={id}>{capsuleName(id)}</option>)}
         </select>
+        <div className="adm-chips">
+          {[
+            ['all', 'ALL', all.length],
+            ['low', 'LOW', all.filter(isLow).length],
+            ['out', 'OUT', all.filter(isOut).length],
+            ['hidden', 'HIDDEN', all.filter((p) => p.status === 'hidden').length],
+          ].map(([key, label, n]) => (
+            <button
+              key={key}
+              type="button"
+              className={`adm-chip ${view === key ? 'on' : ''}`}
+              onClick={() => setView(key)}
+            >
+              {label} <b>{n}</b>
+            </button>
+          ))}
+        </div>
         <button className="adm-btn ghost" onClick={exportCsv}>⤓ EXPORT CSV</button>
         <button className="adm-btn ghost" onClick={reload}>↻</button>
       </div>
       <div className="adm-card" style={{ padding: 6 }}>
         <table className="adm-table">
-          <thead><tr><th>PRODUCT</th><th>CAPSULE</th><th>PRICE</th><th>SALE</th><th>STOCK</th><th>STATUS</th><th>VARIANTS</th><th>PHOTOS</th><th /></tr></thead>
+          <thead><tr>
+            <Th k="title">PRODUCT</Th>
+            <Th k="album">CAPSULE</Th>
+            <Th k="price">PRICE</Th>
+            <th>SALE</th>
+            <Th k="stock">STOCK</Th>
+            <th>STATUS</th><th>VARIANTS</th><th>PHOTOS</th><th />
+          </tr></thead>
           <tbody>
             {products.map((p) => {
               const vCount = (p.product_variants || []).filter(isStockRow).length
@@ -1544,7 +1620,7 @@ function Ledger() {
               <Fragment key={p.id}>
               <tr className={open === p.id ? 'is-open' : ''}>
                 <td><b>{p.title}</b>{p.category ? <span className="adm-note"> · {p.category}</span> : null}</td>
-                <td className="adm-mono">{p.album_id || '—'}</td>
+                <td>{p.album_id ? capsuleName(p.album_id) : '—'}</td>
                 <td><input type="number" defaultValue={p.price} onBlur={(e) => Number(e.target.value) !== Number(p.price) && save(p.id, { price: Number(e.target.value) })} /></td>
                 <td><input type="number" defaultValue={p.sale_price ?? ''} placeholder="—" onBlur={(e) => save(p.id, { sale_price: e.target.value === '' ? null : Number(e.target.value) })} /></td>
                 <td>
@@ -1574,7 +1650,11 @@ function Ledger() {
               )}
               </Fragment>
             )})}
-            {!busy && !products.length && <tr><td colSpan="9" className="adm-note" style={{ padding: 20 }}>Ledger is empty — add stock first.</td></tr>}
+            {!busy && !products.length && (
+              <tr><td colSpan="9" className="adm-note" style={{ padding: 20 }}>
+                {all.length ? 'Nothing matches those filters.' : 'Ledger is empty — add stock first.'}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -1746,14 +1826,49 @@ function Albums() {
 
   if (err) return <Err err={err} retry={reload} />
   const rows = data || []
-  const shown = rows.filter((a) => {
-    if (filter === 'live' && a.status !== 'live') return false
+
+  // The shelf in the order the storefront actually reads it. Ties break
+  // by id so the list can never shuffle between renders.
+  const ordered = [...rows].sort(
+    (x, y) => (x.sort ?? 0) - (y.sort ?? 0) || String(x.id).localeCompare(String(y.id))
+  )
+  const posOf = new Map(ordered.map((a, i) => [a.id, i]))
+
+  // Move a capsule to a position and renumber the shelf contiguously —
+  // but write only the rows that actually shift, so nudging one capsule
+  // never rewrites all 110.
+  const moveTo = async (id, toIdx) => {
+    const from = ordered.findIndex((a) => a.id === id)
+    if (from < 0) return
+    const to = Math.max(0, Math.min(ordered.length - 1, toIdx))
+    if (to === from) return
+    const next = [...ordered]
+    next.splice(to, 0, ...next.splice(from, 1))
+    const was = new Map(ordered.map((a) => [a.id, a.sort ?? 0]))
+    const patches = next
+      .map((a, i) => ({ id: a.id, sort: i }))
+      .filter((pch) => was.get(pch.id) !== pch.sort)
+    try {
+      await Promise.all(patches.map((pch) => updateAlbumRow(pch.id, { sort: pch.sort })))
+      reload()
+    } catch (e) { alert(e.message) }
+  }
+
+  const shown = ordered.filter((a) => {
+    // "open" means what the shopper sees: live AND not behind a sticker
+    if (filter === 'live' && (a.status !== 'live' || a.effects?.comingSoon)) return false
     if (filter === 'draft' && a.status === 'live') return false
     if (filter === 'soon' && !a.effects?.comingSoon) return false
     const hay = `${a.capsule_no} ${a.artist} ${a.title} ${a.featured}`.toLowerCase()
     return hay.includes(q.trim().toLowerCase())
   })
   const selected = shown.find((a) => a.id === selectedId) || shown[0] || null
+  const FILTERS = [
+    ['all', 'ALL', rows.length],
+    ['live', 'OPEN', rows.filter((a) => a.status === 'live' && !a.effects?.comingSoon).length],
+    ['soon', 'COMING SOON', rows.filter((a) => a.effects?.comingSoon).length],
+    ['draft', 'DRAFT', rows.filter((a) => a.status !== 'live').length],
+  ]
 
   const doImport = async () => {
     setImporting(true)
@@ -1778,6 +1893,33 @@ function Albums() {
         </button>
         <button className="adm-btn ghost" onClick={reload}>↻</button>
       </div>
+      <div className="adm-toolbar">
+        <input
+          type="search"
+          placeholder={`Search ${rows.length} capsules — artist, title, song…`}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <div className="adm-chips">
+          {FILTERS.map(([key, label, n]) => (
+            <button
+              key={key}
+              type="button"
+              className={`adm-chip ${filter === key ? 'on' : ''}`}
+              onClick={() => setFilter(key)}
+            >
+              {label} <b>{n}</b>
+            </button>
+          ))}
+        </div>
+        {(q || filter !== 'all') && (
+          <span className="adm-note">
+            {shown.length} shown
+            <button type="button" className="adm-btn ghost sm" style={{ marginLeft: 8 }}
+              onClick={() => { setQ(''); setFilter('all') }}>CLEAR</button>
+          </span>
+        )}
+      </div>
       {bulk && (
         <div className={`adm-bulk ${bulk.running ? 'running' : 'done'}`}>
           <div className="adm-bulk-bar">
@@ -1800,23 +1942,41 @@ function Albums() {
       {selected && (
         <div className="adm-studio">
           <aside className="adm-studio-list" aria-label="Capsules">
-            {shown.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                className={`adm-studio-pick ${selected.id === a.id ? 'on' : ''}`}
-                onClick={() => setSelectedId(a.id)}
-              >
-                {a.artwork ? <img src={a.artwork.replace('1200x1200bb', '420x420bb')} alt="" /> : <span className="pick-art" />}
-                <span className="pick-copy">
-                  <b>{a.capsule_no} · {a.title}</b>
-                  <small>{a.artist} · {a.year}</small>
-                </span>
-                {a.effects?.comingSoon && <span className="pill draft">soon</span>}
-              </button>
-            ))}
+            {shown.map((a) => {
+              const pos = posOf.get(a.id) ?? 0
+              return (
+                <div key={a.id} className={`adm-studio-item ${selected.id === a.id ? 'on' : ''}`}>
+                  <button
+                    type="button"
+                    className="adm-studio-pick"
+                    onClick={() => setSelectedId(a.id)}
+                  >
+                    <span className="pick-pos" title="Position on the shop shelf">{pos + 1}</span>
+                    {a.artwork ? <img src={a.artwork.replace('1200x1200bb', '420x420bb')} alt="" /> : <span className="pick-art" />}
+                    <span className="pick-copy">
+                      <b>{a.capsule_no ? `${a.capsule_no} · ` : ''}{a.title}</b>
+                      <small>{a.artist} · {a.year}</small>
+                    </span>
+                    {a.effects?.comingSoon && <span className="pill draft">soon</span>}
+                  </button>
+                  <span className="pick-moves">
+                    <button type="button" title="Move one place earlier on the shelf"
+                      disabled={pos === 0} onClick={() => moveTo(a.id, pos - 1)}>▲</button>
+                    <button type="button" title="Move one place later on the shelf"
+                      disabled={pos === ordered.length - 1} onClick={() => moveTo(a.id, pos + 1)}>▼</button>
+                  </span>
+                </div>
+              )
+            })}
           </aside>
-          <AlbumRow key={selected.id} a={selected} onSaved={reload} />
+          <AlbumRow
+            key={selected.id}
+            a={selected}
+            position={(posOf.get(selected.id) ?? 0) + 1}
+            shelfCount={ordered.length}
+            onMove={moveTo}
+            onSaved={reload}
+          />
         </div>
       )}
     </>
@@ -1974,11 +2134,11 @@ function NewCapsule({ onClose, onCreated, onAdded, existing }) {
   )
 }
 
-function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
+function AlbumRow({ a, open = true, onToggle = () => {}, onSaved, position = 1, shelfCount = 1, onMove }) {
   const seed = () => ({
     artist: a.artist || '', title: a.title || '', display_title: a.display_title || '',
     year: a.year ?? '', label: a.label || '', capsule_no: a.capsule_no || '', featured: a.featured || '',
-    story: a.story || '', status: a.status || 'live', sort: a.sort ?? 0,
+    story: a.story || '', status: a.status || 'live', position,
     palette: { ...(a.palette || {}) }, fonts: { ...(a.fonts || {}) },
     ticker: [...(a.ticker || [])], notes: (a.notes || []).map((n) => ({ ...n })), artwork: a.artwork || '',
     comingSoon: !!a.effects?.comingSoon, comingSoonText: a.effects?.comingSoonText || 'COMING SOON',
@@ -1999,7 +2159,7 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
       await updateAlbumRow(a.id, {
         artist: edit.artist, title: edit.title, display_title: edit.display_title,
         year: edit.year === '' ? null : Number(edit.year), label: edit.label, capsule_no: edit.capsule_no,
-        featured: edit.featured, story: edit.story, status: edit.status, sort: Number(edit.sort) || 0,
+        featured: edit.featured, story: edit.story, status: edit.status,
         palette: edit.palette, fonts: edit.fonts, ticker: edit.ticker.filter(Boolean),
         notes: edit.notes.filter((n) => n.text), artwork: edit.artwork || null,
         effects: {
@@ -2015,6 +2175,13 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
           ? { start: Number(edit.clipStart) || 0, ...(edit.clipEnd !== '' ? { duration: Math.max(0.5, Number(edit.clipEnd) - (Number(edit.clipStart) || 0)) } : {}), ...(edit.clipSrc ? { src: edit.clipSrc } : {}) }
           : {},
       })
+      // Position is a place on the shelf, not a stored number — moving
+      // renumbers the neighbours too, so it goes through the shelf
+      // reorder rather than being written straight onto this row.
+      const want = Math.round(Number(edit.position))
+      if (onMove && Number.isFinite(want) && want !== position) {
+        await onMove(a.id, Math.max(0, Math.min(shelfCount - 1, want - 1)))
+      }
       setF(null); onSaved()
     } catch (e) { alert(e.message) }
     setBusy(false)
@@ -2077,7 +2244,15 @@ function AlbumRow({ a, open = true, onToggle = () => {}, onSaved }) {
           </div>
           <div className="adm-field"><label>YEAR</label><input value={edit.year} onChange={(e) => set('year', e.target.value)} /></div>
           <div className="adm-field"><label>LABEL</label><input value={edit.label} onChange={(e) => set('label', e.target.value)} /></div>
-          <div className="adm-field"><label>SHELF ORDER</label><input type="number" value={edit.sort} onChange={(e) => set('sort', e.target.value)} /></div>
+          <div className="adm-field">
+            <label>SHELF POSITION (1 = first record in the crate)</label>
+            <input
+              type="number" min="1" max={shelfCount}
+              value={edit.position}
+              onChange={(e) => set('position', e.target.value)}
+            />
+            <small className="adm-note">now #{position} of {shelfCount} — save to move it</small>
+          </div>
           {/* status + coming soon */}
           <div className="adm-field"><label>STATUS</label>
             <select value={edit.status} onChange={(e) => set('status', e.target.value)}>
@@ -2464,6 +2639,32 @@ const SETTING_FIELDS = [
   ['contact', 'city', 'CITY LINE', 'KATHMANDU'],
 ]
 
+// The order line is the one setting that silently loses money when it's
+// wrong — a number missing its country code just opens a chat with
+// nobody. Show what wa.me will actually do with it, before saving.
+function WaCheck({ value }) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (!digits) return <small className="adm-note">No number — the ORDER buttons will go nowhere.</small>
+  const problem =
+    String(value || '') !== digits
+      ? 'Remove the +, spaces and dashes — wa.me wants digits only.'
+      : digits.length < 10
+        ? 'Too short to be a full international number.'
+        : digits.startsWith('0')
+          ? 'Starts with 0 — use the country code instead of a trunk prefix.'
+          : null
+  return (
+    <small className={problem ? 'adm-warn-inline' : 'adm-note'}>
+      {problem || (
+        <>
+          opens <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer">wa.me/{digits}</a>
+          {' '}— open it once and check it reaches you
+        </>
+      )}
+    </small>
+  )
+}
+
 function Settings({ email }) {
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -2500,17 +2701,31 @@ function Settings({ email }) {
           <p className="adm-note">Loading…</p>
         ) : (
           <div className="adm-form" style={{ marginTop: 6 }}>
-            {SETTING_FIELDS.map(([group, key, label, ph]) => (
-              <div className="adm-field" key={`${group}.${key}`}>
-                <label>{label}</label>
-                <input
-                  value={form[group][key] ?? ''}
-                  placeholder={ph}
-                  onChange={(e) =>
-                    setForm({ ...form, [group]: { ...form[group], [key]: e.target.value } })
-                  }
-                />
-              </div>
+            {['brand', 'contact'].map((group) => (
+              <Fragment key={group}>
+                <div className="adm-sect-head full">
+                  <span>{group === 'brand' ? '1' : '2'}</span>
+                  {group === 'brand' ? 'BRAND' : 'CONTACT & ORDER ROUTING'}
+                  <em>
+                    {group === 'brand'
+                      ? 'the name, tagline and announcement bar on the shop wall'
+                      : 'where every ORDER button sends the shopper'}
+                  </em>
+                </div>
+                {SETTING_FIELDS.filter(([g]) => g === group).map(([g, key, label, ph]) => (
+                  <div className="adm-field" key={`${g}.${key}`}>
+                    <label>{label}</label>
+                    <input
+                      value={form[g][key] ?? ''}
+                      placeholder={ph}
+                      onChange={(e) =>
+                        setForm({ ...form, [g]: { ...form[g], [key]: e.target.value } })
+                      }
+                    />
+                    {key === 'whatsapp' && <WaCheck value={form.contact.whatsapp} />}
+                  </div>
+                ))}
+              </Fragment>
             ))}
             {msg && <div className={`full ${msg.ok ? 'adm-ok' : 'adm-err'}`}>{msg.text}</div>}
             <div className="full">

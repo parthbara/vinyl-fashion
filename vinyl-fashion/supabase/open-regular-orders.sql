@@ -14,13 +14,15 @@
 --
 -- Reversible: re-run set-iceman-preorder.sql to take reservations again.
 
--- 1) Clear the pre-order keys and unlock the Coming-Soon sticker.
---    Dropping the keys (rather than setting false) means the seed's
---    default stands if these ever diverge again.
+-- 1) Turn the pre-order OFF and unlock the Coming-Soon sticker.
+--    Written as an explicit `false` rather than by dropping the keys:
+--    db.js merges the DB row's effects over the seed, so a *missing*
+--    key just lets the seed's old preorder:true show through. An
+--    explicit false wins no matter which version of the code is
+--    deployed — so this script fixes the live site on its own.
 update albums
-set effects = (coalesce(effects, '{}'::jsonb)
-                 - 'preorder' - 'preorderText' - 'preorderNote')
-              || jsonb_build_object('comingSoon', false)
+set effects = coalesce(effects, '{}'::jsonb)
+              || jsonb_build_object('preorder', false, 'comingSoon', false)
 where id in ('iceman', 'blonde');
 
 -- 2) Both capsules must be 'live' to appear on the shelf at all

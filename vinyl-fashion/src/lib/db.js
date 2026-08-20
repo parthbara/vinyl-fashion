@@ -31,7 +31,7 @@ function normalizeProduct(row) {
   const colorsByName = new Map() // name → { name, hex, imgIdx }
   const designSet = new Set()
   const sizeSet = new Set()
-  const variantRows = [] // { color, design, size, stock }
+  const variantRows = [] // { color, design, size, stock, price }
 
   const addColor = (name, hex, idx) => {
     const nm = (name || '').trim()
@@ -46,6 +46,8 @@ function normalizeProduct(row) {
     const size = v.size || null
     if (size) sizeSet.add(size)
     const stock = v.stock ?? 0
+    // null = no override; this line just costs whatever the product costs
+    const vPrice = v.price != null ? Number(v.price) : null
 
     if (c.startsWith('combo:')) {
       const parts = c.slice('combo:'.length).split('|')
@@ -55,28 +57,44 @@ function normalizeProduct(row) {
       const design = parts.slice(3).join('|').trim() || null
       if (name) addColor(name, parts[1], idx)
       if (design) designSet.add(design)
-      variantRows.push({ color: name || null, design, size, stock, imgIdx: idx })
+      variantRows.push({ color: name || null, design, size, stock, price: vPrice, imgIdx: idx })
     } else if (c.startsWith('color:')) {
       const [name, hex, idxRaw] = c.slice('color:'.length).split('|')
       const idx = idxRaw !== undefined && idxRaw !== '' ? Number(idxRaw) : null
       if ((name || '').trim()) addColor(name, hex, idx)
-      variantRows.push({ color: (name || '').trim() || null, design: null, size, stock })
+      variantRows.push({ color: (name || '').trim() || null, design: null, size, stock, price: vPrice })
     } else if (c.startsWith('design:')) {
       const d = c.slice('design:'.length).trim()
       if (d) designSet.add(d)
     } else if (c) {
       designSet.add(c.trim()) // legacy plain = a design
     } else if (size) {
-      variantRows.push({ color: null, design: null, size, stock }) // size-only stock
+      variantRows.push({ color: null, design: null, size, stock, price: vPrice }) // size-only stock
     }
   }
+
+  // What the product costs before any per-variant override kicks in.
+  const price = row.price != null ? Number(row.price) : null
+  const salePrice = row.sale_price != null ? Number(row.sale_price) : null
+  const basePrice = salePrice ?? price
+
+  // The spread of what this product can actually cost. Lines with their
+  // own price contribute it; lines without contribute the base. A
+  // product whose variants all cost the same collapses to one value, so
+  // the storefront can keep printing a single price for the common case.
+  const priced = variantRows.filter((r) => r.price != null).map((r) => r.price)
+  const inherits = variantRows.length === 0 || variantRows.some((r) => r.price == null)
+  const spread = [...priced, ...(inherits && basePrice != null ? [basePrice] : [])]
 
   return {
     id: row.id,
     name: row.title,
     type: row.garment_type || 'tee',
-    price: row.price != null ? Number(row.price) : null,
-    salePrice: row.sale_price != null ? Number(row.sale_price) : null,
+    price,
+    salePrice,
+    basePrice,
+    priceMin: spread.length ? Math.min(...spread) : null,
+    priceMax: spread.length ? Math.max(...spread) : null,
     stock: row.stock ?? null,
     caption: row.caption || null,
     description: row.description || null,
@@ -97,7 +115,7 @@ export async function fetchProducts(albumId) {
   const supabase = await getSupabase()
   const { data, error } = await supabase
     .from('products')
-    .select('id,title,garment_type,price,sale_price,stock,description,caption,images,status,sort,product_variants(color,size,stock)')
+    .select('id,title,garment_type,price,sale_price,stock,description,caption,images,status,sort,product_variants(color,size,stock,price)')
     .eq('album_id', albumId)
     .neq('status', 'hidden')
     .order('sort', { ascending: true })

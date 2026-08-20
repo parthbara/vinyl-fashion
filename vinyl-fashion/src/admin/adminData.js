@@ -86,7 +86,7 @@ export async function fetchAllProducts() {
   const s = await sb()
   const { data, error } = await s
     .from('products')
-    .select('*, product_variants(id,color,size,stock)')
+    .select('*, product_variants(id,color,size,stock,price)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data
@@ -153,8 +153,9 @@ const variantRow = (product_id, prefix, label, stock) => ({
   stock,
 })
 
-// `combos` (preferred): [{ color: 'color:Name|#hex|imgIdx'|null, size|null, stock }]
-// — one row per colour×size combo, each with its own stock count.
+// `combos` (preferred): [{ color: 'color:Name|#hex|imgIdx'|null, size|null, stock, price }]
+// — one row per colour×size combo, each with its own stock count and,
+// optionally, its own price (null = charge the product's price).
 export async function addProduct(fields, files, designs = [], combos = null) {
   const s = await sb()
   const images = files?.length ? await uploadProductImages(files) : []
@@ -166,7 +167,13 @@ export async function addProduct(fields, files, designs = [], combos = null) {
   if (error) throw error
   const rows = [
     ...designs.map((v) => v.trim()).filter(Boolean).map((d) => variantRow(data.id, 'design', d, fields.stock ?? 0)),
-    ...(combos || []).map((c) => ({ product_id: data.id, color: c.color, size: c.size, stock: c.stock ?? 0 })),
+    ...(combos || []).map((c) => ({
+      product_id: data.id,
+      color: c.color,
+      size: c.size,
+      stock: c.stock ?? 0,
+      price: c.price ?? null,
+    })),
   ]
   if (rows.length) {
     const { error: ve } = await s.from('product_variants').insert(rows)
@@ -185,7 +192,15 @@ export async function addVariants(product_id, rows) {
   const s = await sb()
   const { error } = await s
     .from('product_variants')
-    .insert(rows.map((r) => ({ product_id, color: r.color, size: r.size ?? null, stock: r.stock ?? 0 })))
+    .insert(
+      rows.map((r) => ({
+        product_id,
+        color: r.color,
+        size: r.size ?? null,
+        stock: r.stock ?? 0,
+        price: r.price ?? null,
+      }))
+    )
   if (error) throw error
 }
 
@@ -219,6 +234,7 @@ export async function duplicateProduct(p) {
   if (error) throw error
   const vars = (p.product_variants || []).map((v) => ({
     product_id: data.id, color: v.color ?? null, size: v.size ?? null, stock: v.stock ?? 0,
+    price: v.price ?? null,
   }))
   if (vars.length) {
     const { error: ve } = await s.from('product_variants').insert(vars)

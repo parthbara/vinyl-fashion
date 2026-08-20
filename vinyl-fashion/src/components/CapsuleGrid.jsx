@@ -7,6 +7,17 @@ import * as sfx from '../lib/sfx'
 
 const npr = (n) => `NPR ${Number(n).toLocaleString()}`
 
+// One price, or "FROM x" when the variants don't all cost the same.
+// A per-variant override and a product-level sale are alternatives, not
+// layers — a line that names its own price is simply that price.
+function PriceTag({ item }) {
+  const { priceMin: lo, priceMax: hi, price, salePrice } = item
+  if (lo == null) return '—'
+  if (lo !== hi) return <>FROM {npr(lo)}</>
+  if (salePrice) return <><s>{npr(price)}</s> {npr(salePrice)}</>
+  return npr(lo)
+}
+
 // The clothes — front and center on the album page. Renders real
 // products from the DB once they exist; until then (or offline) the
 // placeholder capsule silhouettes. Every piece opens a quick-view
@@ -75,15 +86,7 @@ export default function CapsuleGrid({ album }) {
         {live ? (
           <div className="garment-buy">
             <span className="garment-price">
-              {item.salePrice ? (
-                <>
-                  <s>{npr(item.price)}</s> {npr(item.salePrice)}
-                </>
-              ) : item.price ? (
-                npr(item.price)
-              ) : (
-                '—'
-              )}
+              <PriceTag item={item} />
             </span>
             <span className="garment-order">
               {pre ? 'PRE-ORDER' : item.soldOut ? 'DETAILS' : 'ORDER'}
@@ -141,7 +144,10 @@ function QuickView({ album, item, live, pre, onClose }) {
 
   // a pre-order sells what isn't on the shelf yet, so being out of stock
   // doesn't close the sale — only a missing price does
-  const purchasable = live && item.price && (pre || !item.soldOut)
+  // a variant may name its own price, so the product's own price being
+  // blank no longer means "not for sale"
+  const hasPrice = (item.priceMin ?? 0) > 0
+  const purchasable = live && hasPrice && (pre || !item.soldOut)
   const designs = item.designs || []
   const colors = item.colors || []
   // only REAL sizes — never invent S/M/L that don't exist in stock
@@ -226,7 +232,27 @@ function QuickView({ album, item, live, pre, onClose }) {
     if (target >= 0 && target < images.length) setIdx(target)
   }
 
-  const price = item.salePrice || item.price
+  // Price follows the selection: narrow the stock lines by whatever has
+  // been picked so far, then read their prices (a line without its own
+  // price falls back to the product's). Once colour/design/size are all
+  // chosen the match is unique, which is exactly when ordering unlocks —
+  // so the figure in the WhatsApp message is always the one combo's.
+  const picked = (item.variantRows || []).filter(
+    (v) =>
+      (color == null || (v.color || null) === color) &&
+      (design == null || (v.design || null) === design) &&
+      (size == null || (v.size || null) === size)
+  )
+  const prices = [
+    ...new Set(
+      (picked.length ? picked.map((v) => v.price ?? item.basePrice) : [item.basePrice]).filter(
+        (n) => n != null
+      )
+    ),
+  ]
+  const lo = prices.length ? Math.min(...prices) : null
+  const hi = prices.length ? Math.max(...prices) : null
+  const price = lo
   const spec = `${design ? ` · ${design}` : ''}${color ? ` · ${color}` : ''}${size ? ` · size ${size}` : ''}`
   const capsuleLink = `${window.location.origin}${window.location.pathname}#${album.id}`
   const message = purchasable
@@ -308,12 +334,14 @@ function QuickView({ album, item, live, pre, onClose }) {
           <h3 className="qv-name">{item.name}</h3>
           <p className="qv-price">
             {purchasable ? (
-              item.salePrice ? (
+              lo !== hi ? (
+                <>FROM {npr(lo)}</>
+              ) : item.salePrice && lo === item.salePrice ? (
                 <>
                   <s>{npr(item.price)}</s> {npr(item.salePrice)}
                 </>
               ) : (
-                npr(item.price)
+                npr(lo)
               )
             ) : item.soldOut ? (
               'SOLD OUT — RESTOCK ON REQUEST'

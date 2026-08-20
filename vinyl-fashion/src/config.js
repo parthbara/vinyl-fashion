@@ -13,8 +13,8 @@ export const BRAND = {
 // WhatsApp number in full international format (no +, spaces, or
 // leading zeros) for wa.me links; display form is cosmetic.
 export const CONTACT = {
-  whatsapp: import.meta.env.VITE_WHATSAPP_NUMBER || '9779818981912',
-  whatsappDisplay: '+977 98-1898-1912',
+  whatsapp: import.meta.env.VITE_WHATSAPP_NUMBER || '9779747716756',
+  whatsappDisplay: '+977 97-4771-6756',
   instagram: 'vinylfashion.np', // ← your handle, no @
   email: 'hello@vinylfashion.com',
   city: 'KATHMANDU',

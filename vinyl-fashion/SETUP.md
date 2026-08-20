@@ -58,7 +58,7 @@ albums with placeholder garments. Everything below is to enable commerce.
 ```bash
 VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGc...          # anon public key
-VITE_WHATSAPP_NUMBER=9779818981912          # your order line
+VITE_WHATSAPP_NUMBER=9779747716756          # your order line
 VITE_ADMIN_PATH=33rpm                        # hidden admin route
 ```
 

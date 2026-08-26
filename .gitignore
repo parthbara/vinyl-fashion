@@ -1,0 +1,9 @@
+# dependencies & build output
+node_modules
+dist
+
+# local editor / tool config
+.vscode/
+.idea/
+.claude/
+.DS_Store

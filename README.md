@@ -48,3 +48,7 @@ stays smooth on integrated graphics.
 - **P2** — lock one song per album, design the real capsule per song
 - **P3** — product pages, cart/checkout, product photography
 - **P4** — more albums, drops with countdowns
+
+## License
+
+MIT, see [LICENSE](LICENSE).

@@ -1,9 +1,18 @@
-# dependencies & build output
 node_modules
 dist
+.DS_Store
+*.local
 
-# local editor / tool config
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / tooling
 .vscode/
 .idea/
 .claude/
-.DS_Store
